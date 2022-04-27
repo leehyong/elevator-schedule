@@ -74,7 +74,9 @@ impl Scheduler {
 
     fn parse_input() -> (Vec<i16>, Vec<i16>) {
         let mut input = String::new();
-        std::io::stdin().read_to_string(&mut input);
+        {
+            std::io::stdin().read_line(&mut input).unwrap();
+        }
         let mut upstairs = vec![];
         let mut downstairs = vec![];
         for item in input.split(|x| x == ',' || x == '，') {
@@ -84,7 +86,7 @@ impl Scheduler {
             if s1.is_empty() {
                 continue;
             }
-            let a = s1.split_once(' ').unwrap();
+            let a = s1.split_once(' ').unwrap_or(("0", ""));
             match a.0.parse() {
                 Ok(v) => {
                     match a.1.trim() {
