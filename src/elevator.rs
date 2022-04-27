@@ -100,16 +100,12 @@ pub struct Elevator {
     no: u8,
     // 互斥量，需要用作电梯同步互斥的元数据；
     meta: Arc<RwLock<ElevatorMeta>>,
-    rx: Receiver<Message>,
-    cx: Sender<Message>,
 }
 
 impl Elevator {
-    pub fn new(no: u8, rx: Receiver<Message>, cx: Sender<Message>,) -> Self {
+    pub fn new(no: u8) -> Self {
         Self {
             no,
-            rx,
-            cx,
             meta: Arc::new(RwLock::new(ElevatorMeta::default())),
         }
     }
@@ -120,14 +116,14 @@ impl Elevator {
     pub fn sleep_run() {
         thread::sleep(time::Duration::from_millis(ELEVATOR_SLEEP_TIME_IN_MILLISECONDS as u64));
     }
-    fn  wait_and_close_door() {
+    fn wait_and_close_door() {
         thread::sleep(time::Duration::from_millis(SUSPEND_WAIT_IN_MILLISECONDS as u64));
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, rxFromSchedule: Receiver<Message>, sendTofSchedule:Sender<Message>) {
         use Message::*;
         loop {
-            if let Ok(msg) = self.rx.recv() {
+            if let Ok(msg) = rxFromSchedule.recv() {
                 match msg {
                     Quit => break,
                     Up(floor) => {
@@ -149,11 +145,11 @@ impl Elevator {
                                 }
                             }
                             // 等人进入电梯
-                            Self:: wait_and_close_door();
+                            Self::wait_and_close_door();
                             // todo, 在电梯输入想去楼， 电梯跑到指定楼层
                         }
-                    },
-                    Down(floor) =>{
+                    }
+                    Down(floor) => {
                         let (can_going_down, mut diff) = {
                             let lock = self.meta.read().unwrap();
                             (lock.can_in(Floor::Down(floor)), lock.diff_floor(floor))
@@ -172,11 +168,10 @@ impl Elevator {
                                 }
                             }
                             // 等人进入电梯
-                            Self:: wait_and_close_door();
+                            Self::wait_and_close_door();
                             // todo, 在电梯输入想去楼， 电梯跑到指定楼层
-
                         }
-                    },
+                    }
                     _ => {}
                 }
             } else {

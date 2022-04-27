@@ -11,36 +11,26 @@ use crate::message::Message;
 
 // 电梯算法调度器
 pub struct Scheduler {
-    senders: Vec<Sender<Message>>,
-    receivers: Vec<Receiver<Message>>,
     rxOneToMany: Receiver<Message>,
     // 从Scheduler接收电梯里的消息
     cxOneToMany: Sender<Message>,
+    senders: HashMap<u8, Sender<Message>>,
     // 从多个电梯里往Scheduler发送消息
     handles: Vec<JoinHandle<()>>,
 
 }
 
 lazy_static! {
-    static ref AllElevators: Arc<RwLock<HashMap<u8, Elevator>>> = Arc::new(RwLock::new(HashMap::new()));
+   pub static ref AllElevatorsMap: Arc<RwLock<HashMap<u8, Elevator>>> = Arc::new(RwLock::new(HashMap::with_capacity(MAX_ELEVATOR_NUM)));
 }
 
 impl Scheduler {
     pub fn new() -> Self {
-        let mut senders = Vec::with_capacity(MAX_ELEVATOR_NUM);
-        let mut receivers = Vec::with_capacity(MAX_ELEVATOR_NUM);
         let (cx, rx) = channel();
-        for i in 0..MAX_ELEVATOR_NUM {
-            let (sender, receiver) = channel();
-            // elevators.push(Arc::new(Elevator::new(i as u8, receiver, cx.clone())));
-            senders.push(sender);
-            receivers.push(receiver);
-        }
         Self {
-            senders,
-            receivers,
             rxOneToMany: rx,
             cxOneToMany: cx,
+            senders: HashMap::with_capacity(MAX_ELEVATOR_NUM),
             handles: Vec::with_capacity(MAX_ELEVATOR_NUM),
         }
     }
@@ -48,7 +38,9 @@ impl Scheduler {
         println!("请按照以下格式以运行电梯,梯楼层范围:{}~{}，不在有效楼层，视为无效输入!", MIN_FLOOR, MAX_FLOOR);
         println!("\t10 上、10 up、10 u, 表示要从10楼上楼");
         println!("\t42 下、42 down、42 d, 表示要从42楼下楼");
-        println!("\texit、e、退出, 表示推出当前程序");
+        println!("\texit、e、退出, 表示推出当前程序\n");
+        println!("\t一行可以有多个输入，用 ',', ','分隔, 表示同一时间有多个人想要乘电梯\n");
+
     }
 
     fn run_schedule(&self) {
@@ -118,17 +110,24 @@ impl Scheduler {
 
     pub fn run(&mut self) {
         for i in (0..MAX_ELEVATOR_NUM).rev() {
-            let rx = self.receivers.pop().unwrap();
             let cx = self.cxOneToMany.clone();
+            let (sender, receiver) = channel();
+            let u = i as u8;
+            self.senders.insert(u, sender);
             self.handles.push(thread::spawn(
                 move || {
                     let u = i as u8;
-                    let ele = Elevator::new(u, rx, cx);
+                    let ele = Elevator::new(u);
                     {
-                        let mut lock = AllElevators.write().unwrap();
+                        let mut lock = AllElevatorsMap.write().unwrap();
                         lock.insert(u, ele);
                     }
-                    AllElevators.read().unwrap().get(&u).run();
+                    AllElevatorsMap
+                        .read()
+                        .unwrap()
+                        .get(&u)
+                        .unwrap()
+                        .run(receiver, cx);
                 }));
         }
         // 主线程运行调度器程序
