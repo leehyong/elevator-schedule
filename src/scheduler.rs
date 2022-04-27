@@ -86,10 +86,23 @@ impl Scheduler {
             if s1.is_empty() {
                 continue;
             }
-            let a = s1.split_once(' ').unwrap_or(("0", ""));
-            match a.0.parse() {
+            let mut s = String::new();
+            let mut op = String::new();
+            let mut digit_done = false;
+            for ch in s1.chars(){
+                if !digit_done && ch.is_digit(10){
+                    s .push(ch);
+                }else{
+                    digit_done = true;
+                    if !ch.is_whitespace(){
+                        op .push(ch);
+                    }
+                }
+            }
+            println!("{} - {}", s.parse::<i16>().unwrap_or(-10), op);
+            match s.parse() {
                 Ok(v) => {
-                    match a.1.trim() {
+                    match op.as_str(){
                         "u" | "U" | "up" | "上" => {
                             upstairs.push(v);
                         }
