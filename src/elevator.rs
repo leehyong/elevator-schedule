@@ -8,6 +8,7 @@ use crate::state::State;
 use crate::conf::*;
 use crate::message::Message;
 use rand::prelude::*;
+
 // 电梯元数据
 pub struct ElevatorMeta {
     // 当前电梯的人数
@@ -28,9 +29,11 @@ impl Default for ElevatorMeta {
             let mut rng = thread_rng();
             rng.gen_range(MIN_FLOOR..=MAX_FLOOR)
         };
-        Self{
+        Self {
             cur_floor,
-            ..Default::default()
+            persons: 0,
+            state: State::default(),
+            stop_floors: BTreeSet::new(),
         }
     }
 }
@@ -132,7 +135,7 @@ impl Elevator {
         thread::sleep(time::Duration::from_millis(SUSPEND_WAIT_IN_MILLISECONDS as u64));
     }
 
-    pub fn run(&self, rxFromSchedule: Receiver<Message>, sendTofSchedule:Sender<Message>) {
+    pub fn run(&self, rxFromSchedule: Receiver<Message>, sendTofSchedule: Sender<Message>) {
         use Message::*;
         loop {
             if let Ok(msg) = rxFromSchedule.recv() {
