@@ -9,8 +9,8 @@ pub const MIN_FLOOR: i16 = -4;
 pub const MAX_PERSON_CAPACITY: u8 = 18;
 
 // 上下人等待时间, 单位：豪秒
-pub const SUSPEND_WAIT_IN_MILLISECONDS: u32 = 5 * 1000;
+pub const SUSPEND_WAIT_IN_MILLISECONDS: u32 = 5 * 100;
 // 电梯每层的运行时间, 单位：豪秒
-pub const EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS: u32 = 2 * 1000;
+pub const EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS: u32 = 2 * 100;
 // 电梯运行过程中的休眠时间, 单位：豪秒
-pub const ELEVATOR_SLEEP_TIME_IN_MILLISECONDS: u32 = 1 * 1000;
+pub const ELEVATOR_SLEEP_TIME_IN_MILLISECONDS: u32 = 1 * 100;
