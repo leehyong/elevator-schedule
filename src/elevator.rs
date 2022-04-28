@@ -23,10 +23,9 @@ pub struct ElevatorMeta {
     pub cur_floor: i16,
     // 电梯运行状态
     pub state: State,
-    // 当前电梯人数
-    // 电梯要停止的楼层。
-    // 楼层是升序排列, 使用BTreeSet,BTreeSet的key是有序的
-    pub stop_floors: BTreeSet<i16>,
+    // 每次电梯从静止态开
+    // 始运行时，第一个按入要前往的楼层，决定了电梯是上升还是下降
+    pub stop_floors: Vec<i16>,
 }
 
 impl Default for ElevatorMeta {
@@ -39,7 +38,7 @@ impl Default for ElevatorMeta {
             cur_floor,
             persons: 0,
             state: State::default(),
-            stop_floors: BTreeSet::new(),
+            stop_floors: vec![],
         }
     }
 }
@@ -120,10 +119,10 @@ impl ElevatorMeta {
         use State::*;
         match self.state {
             GoingDown | GoingDownSuspend => {
-                self.stop_floors.insert(floor);
+                self.stop_floors.push(floor);
             }
             GoingUp | GoingUpSuspend => {
-                self.stop_floors.insert(floor);
+                self.stop_floors.push(floor);
             }
             _ => {}
         }
@@ -224,7 +223,7 @@ impl Elevator {
         if floors.len() > 0 {
             while let Some(floor) = floors.pop() {
                 let mut diff = {
-                    meta.stop_floors.remove(&floor);
+                    // meta.stop_floors.remove(&floor);
                     meta.state = if is_up { State::GoingUp } else { State::GoingDown };
                     meta.diff_floor(floor)
                 };
@@ -237,7 +236,6 @@ impl Elevator {
                 Self::fake_run(diff as u64);
                 // 到了指定楼层，则等人进出电梯
                 {
-                    meta.stop_floors.remove(&floor);
                     if is_up {
                         meta.state = State::GoingUpSuspend;
                         meta.cur_floor += diff;
@@ -284,8 +282,9 @@ impl Elevator {
                                  self.meta.read().unwrap().cur_floor,
                                  floor);
                         let mut meta = self.meta.write().unwrap();
-                        meta.stop_floors.insert(floor);
+                        meta.stop_floors.push(floor);
                     }
+
                     Down(floor) => {
                         self.handle_schedule_updown_floors(
                             &vec![floor],
