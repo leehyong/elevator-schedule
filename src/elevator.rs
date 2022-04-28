@@ -160,7 +160,8 @@ impl Elevator {
     }
 
     fn handle_schedule_updown_floors(&self, floors: &[i16], send_to_schedule: Sender<Message>, is_up: bool) {
-        // 处理调度器安排的上楼任务
+        println!("[schedule]电梯#{},处理调度器安排的上下楼任务", self.no);
+        // 处理调度器安排的上下楼任务
         for floor in floors {
             let (can_move, mut diff) = {
                 let lock = self.meta.read().unwrap();
@@ -177,6 +178,12 @@ impl Elevator {
                     }
                 }
                 // 通过 sleep 假装电梯在逐层运行
+                println!("[schedule]电梯#{},[{} -> {}]，请耐心等待...",
+                         self.no,
+                         self.meta.read().unwrap().cur_floor,
+                         floor,
+                );
+                // 通过 sleep 假装电梯在逐层运行
                 Self::fake_run(diff as u64);
                 let mut delta = 1u8;
                 let mut plus = false;
@@ -189,10 +196,17 @@ impl Elevator {
                     }
                     (plus, delta) = lock.set_person_num();
                 }
+                println!("[schedule]电梯#{},[{} -> {}]，已完成!\t电梯开门...",
+                         self.no,
+                         self.meta.read().unwrap().cur_floor,
+                         floor,
+                );
                 // 等人进出电梯
                 Self::wait_and_close_door();
+                println!("[schedule]电梯#{}，关门...! {{{}-delta:{}}}", self.no, if plus {"上"}else{"下"}, delta);
                 // 上人了才通知调度器， 用户进入了电梯，现在需要用户输入前往的楼层了
-                if plus {
+                if plus && delta > 0 {
+                    println!("[schedule]电梯#{}，请求用户输入楼层! delta:{}", self.no, delta);
                     for _ in 0..delta {
                         send_to_schedule.send(Message::InputtingFloor(self.no)).unwrap();
                     }
@@ -220,6 +234,11 @@ impl Elevator {
                     lock.diff_floor(floor)
                 };
                 // 通过 sleep 假装电梯在逐层运行
+                println!("[person]电梯#{},[{} -> {}]，请耐心等待...",
+                         self.no,
+                         self.meta.read().unwrap().cur_floor,
+                         floor,
+                );
                 Self::fake_run(diff as u64);
                 // 到了指定楼层，则等人进出电梯
                 {
@@ -233,7 +252,14 @@ impl Elevator {
                         lock.cur_floor -= diff;
                     }
                 };
+                println!("[person]电梯#{},[{} -> {}]，已完成!\t电梯开门...",
+                         self.no,
+                         self.meta.read().unwrap().cur_floor,
+                         floor,
+                );
                 Self::wait_and_close_door();
+                println!("[person]电梯#{}，关门...!",
+                         self.no);
             }
         }
         let mut meta = self.meta.write().unwrap();

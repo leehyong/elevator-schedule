@@ -244,6 +244,7 @@ impl Scheduler {
                                 println!("{}", e)
                             }
                         }
+                        input.clear();
                         println!("请重新输入楼层,范围:{}~{}！", MIN_FLOOR, MAX_FLOOR);
                     }
                     let cx = self.senders.get(&i).unwrap();
