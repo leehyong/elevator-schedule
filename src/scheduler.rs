@@ -74,7 +74,7 @@ impl Scheduler {
             // 无事可做
             return;
         }
-        println!("上 {:?}\n 下 {:?}", &upstairs, &downstairs);
+        println!("上 {:?}\n下 {:?}", &upstairs, &downstairs);
         // 存放上行接人的电梯
         let mut ups = Vec::with_capacity(4);
         // 存放下行接人的电梯
@@ -89,7 +89,9 @@ impl Scheduler {
                 downs.push(elevator);
             }
         }
-        println!("电梯上行 {:?}\n 电梯下行 {:?}", &ups, &downs);
+        println!("电梯上行\n {}\n电梯下行\n {}",
+                 ups.iter().map(|o|o.to_string()).collect::<Vec<String>>().join("\n"),
+                 downs.iter().map(|o|o.to_string()).collect::<Vec<String>>().join("\n"));
 
         // 调度上行电梯
         self.arrange_up_elevator(&upstairs, &ups);
@@ -113,6 +115,7 @@ impl Scheduler {
                 typ: FloorType::Elevator(elevator.no),
             })
         }
+        println!("{}", bh.iter().map(|o|o.to_string()).collect::<Vec<_>>().join("  "));
         let mut ups = vec![];
         while let Some(item) = bh.pop() {
             match item.typ {
@@ -204,6 +207,7 @@ impl Scheduler {
                     loop {
                         std::io::stdin().read_line(&mut input).unwrap();
                         if let Ok(v) = input.parse() {
+                            println!("{}", v);
                             if v >= MIN_FLOOR && v <= MAX_FLOOR {
                                 floor = v;
                                 break;

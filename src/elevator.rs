@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{thread, time};
 use std::cmp::{max, min};
+use std::fmt::{Display, Formatter};
 use std::option::Option::Some;
 use std::thread::sleep;
 use crate::floor::Floor;
@@ -147,7 +148,7 @@ impl Elevator {
     }
 
     fn fake_run(nums: u64) {
-        if nums >0 {
+        if nums > 0 {
             thread::sleep(time::Duration::from_millis(EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS as u64 * nums));
         }
     }
@@ -166,10 +167,9 @@ impl Elevator {
                 (lock.can_in(Floor::Up(*floor)), lock.diff_floor(*floor))
             };
             if can_move {
-                let mut lock;
                 // 移动到指定楼层
                 {
-                    lock = self.meta.write().unwrap();
+                    let mut lock = self.meta.write().unwrap();
                     if is_up {
                         lock.state = State::GoingUp;
                     } else {
@@ -181,7 +181,7 @@ impl Elevator {
                 let mut delta = 1u8;
                 let mut plus = false;
                 {
-                    lock = self.meta.write().unwrap();
+                    let mut lock = self.meta.write().unwrap();
                     if is_up {
                         lock.state = State::GoingUpSuspend;
                     } else {
@@ -209,7 +209,7 @@ impl Elevator {
             .unwrap()
             .stop_floors
             .iter()
-            .map(|o|*o)
+            .map(|o| *o)
             .collect();
         if floors.len() > 0 {
             while let Some(floor) = floors.pop() {
@@ -293,5 +293,18 @@ impl Elevator {
 impl Drop for Elevator {
     fn drop(&mut self) {
         println!("电梯{}停止工作了", self.no)
+    }
+}
+
+impl Display for Elevator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let meta = self.meta.read().unwrap();
+        write!(f,
+               "电梯#{}, \n\t{}人,在{}层, {}\n",
+               self.no,
+               meta.persons,
+               meta.cur_floor,
+               meta.state
+        )
     }
 }

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 
-#[derive(PartialOrd, PartialEq)]
+#[derive(PartialOrd, PartialEq, Debug)]
 pub enum FloorType {
     Person,
     Elevator(u8),
@@ -12,6 +13,7 @@ impl Default for FloorType {
     }
 }
 
+#[derive(Debug)]
 pub struct UpDownElevatorFloor {
     pub floor: i16,
     pub typ: FloorType,
@@ -62,5 +64,22 @@ impl Eq for UpDownElevatorFloor {}
 impl Ord for UpDownElevatorFloor {
     fn cmp(&self, other: &Self) -> Ordering {
         self.inner_cmp(other)
+    }
+}
+
+
+impl Display for FloorType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f , "{}", match self {
+            FloorType::Elevator(v) => format!("Elevator({})", v),
+            FloorType::Person => "Person".to_string()
+        } )
+    }
+}
+
+
+impl Display for UpDownElevatorFloor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f , "[{}-{}]", self.floor, self.typ)
     }
 }
