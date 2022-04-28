@@ -1,12 +1,15 @@
 use std::cell::RefCell;
 use std::collections::{HashSet, HashMap, BinaryHeap};
 use std::io::{Read, BufRead};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::sync::mpsc::{Sender, channel, Receiver};
 use std::thread::{JoinHandle, Thread};
 use std::cmp::Reverse;
 use std::option::Option::Some;
+use std::time::Duration;
+use tokio::runtime::Runtime;
+
 use crate::conf::*;
 use crate::elevator::Elevator;
 use crate::message::Message;
@@ -27,13 +30,22 @@ pub struct Scheduler {
 
 lazy_static! {
    // pub static ref AllElevatorsMap: Arc<RwLock<HashMap<u8, Elevator>>> = Arc::new(RwLock::new(HashMap::with_capacity(MAX_ELEVATOR_NUM)));
-   pub static ref AllElevatorsMap: HashMap<u8, Elevator> = {
+   static ref AllElevatorsMap: HashMap<u8, Elevator> = {
        let mut ret = HashMap::with_capacity(MAX_ELEVATOR_NUM);
         for x in 0..MAX_ELEVATOR_NUM{
             ret.insert(x as u8, Elevator::new(x as u8));
         }
         ret
     };
+    static ref TokioRuntime: tokio::runtime::Runtime = {
+        // tokio::runtime::Builder::new_current_thread()
+        // .enable_all()
+        // .build()
+        // .unwrap()
+        tokio::runtime::Runtime::new().unwrap()
+    };
+    static ref UpstairsStdInput : Arc<Mutex<Option<Vec<i16>>>> = Arc::new(Mutex::new(None));
+    static ref DownstairsStdInput : Arc<Mutex<Option<Vec<i16>>>> = Arc::new(Mutex::new(None));
 }
 
 impl Scheduler {
@@ -63,7 +75,16 @@ impl Scheduler {
 
     fn schedule_elevator(&self) {
         // 调度电梯去接居民
-        let (upstairs, downstairs) = Self::parse_input();
+        let upstairs;
+        let downstairs;
+        {
+            let mut lock = UpstairsStdInput.lock().unwrap();
+            upstairs = lock.as_ref().unwrap().clone();
+        }
+        {
+            let mut lock = DownstairsStdInput.lock().unwrap();
+            downstairs = lock.as_ref().unwrap().clone();
+        }
         if upstairs.is_empty() && downstairs.is_empty() {
             // 无事可做
             return;
@@ -84,14 +105,21 @@ impl Scheduler {
             }
         }
         println!("电梯上行\n {}\n电梯下行\n {}",
-                 ups.iter().map(|o|o.to_string()).collect::<Vec<String>>().join("\n"),
-                 downs.iter().map(|o|o.to_string()).collect::<Vec<String>>().join("\n"));
+                 ups.iter().map(|o| o.to_string()).collect::<Vec<String>>().join("\n"),
+                 downs.iter().map(|o| o.to_string()).collect::<Vec<String>>().join("\n"));
 
         // 调度上行电梯
         self.arrange_up_elevator(&upstairs, &ups);
         // 调度下行电梯
         self.arrange_down_elevator(&downstairs, &downs);
-
+        {
+            let mut lock = UpstairsStdInput.lock().unwrap();
+            *lock = None;
+        }
+        {
+            let mut lock = DownstairsStdInput.lock().unwrap();
+            *lock = None;
+        }
     }
 
     fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) {
@@ -110,7 +138,6 @@ impl Scheduler {
                 typ: FloorType::Elevator(elevator.no),
             })
         }
-        println!("{}", bh.iter().map(|o|o.to_string()).collect::<Vec<_>>().join("  "));
         let mut ups = vec![];
         while let Some(item) = bh.pop() {
             match item.typ {
@@ -120,6 +147,7 @@ impl Scheduler {
                 FloorType::Elevator(no) => {
                     let cx = self.senders.get(&no).unwrap();
                     // 一次 发送全部
+                    println!("[{}-下行]:{:?}", no, ups.clone());
                     cx.send(Message::Ups(ups.clone())).unwrap();
                 }
             }
@@ -151,6 +179,7 @@ impl Scheduler {
                 FloorType::Elevator(no) => {
                     let cx = self.senders.get(&no).unwrap();
                     // 一次 发送全部
+                    println!("[{}-下行]:{:?}", no, ups.clone());
                     cx.send(Message::Downs(ups.clone())).unwrap();
                 }
             }
@@ -205,13 +234,13 @@ impl Scheduler {
                         }
                         match input.trim().parse() {
                             Ok(v) => {
-                                println!("{}", v);
+                                println!("input.trim: {}", v);
                                 if v >= MIN_FLOOR && v <= MAX_FLOOR {
                                     floor = v;
                                     break;
                                 }
                             }
-                            Err(e) =>{
+                            Err(e) => {
                                 println!("{}", e)
                             }
                         }
@@ -221,19 +250,25 @@ impl Scheduler {
                     cx.send(InputtedFloor(i, floor)).unwrap();
                 }
                 _ => {
-                    Elevator::sleep_run();
                 }
             }
         }
+        Self::parse_input();
     }
 
     const fn stair_capacity() -> usize {
         // 根据经验每部同时乘电梯的楼层数一般不会超过半数，
         // 所有乘电梯的楼层的容量
-        ((((MAX_FLOOR - MIN_FLOOR) >> 1 )as usize) * MAX_ELEVATOR_NUM) as usize
+        ((((MAX_FLOOR - MIN_FLOOR) >> 1) as usize) * MAX_ELEVATOR_NUM) as usize
     }
 
-    fn parse_input() -> (Vec<i16>, Vec<i16>) {
+    async fn handle_input(){
+        {
+            let mut up_lock = UpstairsStdInput.lock().unwrap();
+            let mut down_lock = DownstairsStdInput.lock().unwrap();
+            // 输入的内容还没处理完， 则等待
+            if up_lock.is_some() && down_lock.is_some() { return;}
+        }
         Self::help_hint();
         let mut input = String::new();
         {
@@ -285,8 +320,25 @@ impl Scheduler {
                 }
             }
         }
-        (upstairs.iter().map(|o|*o).collect(),
-         downstairs.iter().map(|o|*o).collect())
+        {
+            let mut up_lock = UpstairsStdInput.lock().unwrap();
+            *up_lock = Some(upstairs.iter().map(|o| *o).collect());
+        }
+        {
+            let mut down_lock = DownstairsStdInput.lock().unwrap();
+            *down_lock = Some(downstairs.iter().map(|o| *o).collect());
+        }
+    }
+
+    fn parse_input(){
+        TokioRuntime.handle().block_on(async {
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_millis(1000)) =>  {
+                    println!("No input, ignore!")
+                }
+               _ = Self::handle_input() => { }
+            };
+        });
     }
 
     pub fn run(&mut self) {
@@ -311,8 +363,9 @@ impl Drop for Scheduler {
     fn drop(&mut self) {
         // 等待子线程运行完
         println!("Scheduler drop");
-        for i in 0..MAX_ELEVATOR_NUM {
-            self.handles[i].join();
+        for _ in 0..MAX_ELEVATOR_NUM {
+            let handle = self.handles.pop().unwrap();
+            handle.join();
         }
     }
 }
