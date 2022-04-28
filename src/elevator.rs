@@ -7,7 +7,7 @@ use crate::floor::Floor;
 use crate::state::State;
 use crate::conf::*;
 use crate::message::Message;
-
+use rand::prelude::*;
 // 电梯元数据
 #[derive(Default)]
 pub struct ElevatorMeta {
@@ -21,6 +21,19 @@ pub struct ElevatorMeta {
     // 电梯要停止的楼层。
     // 楼层是升序排列, 使用BTreeSet,BTreeSet的key是有序的
     pub stop_floors: BTreeSet<i16>,
+}
+
+impl Default for ElevatorMeta {
+    fn default() -> Self {
+        let cur_floor = {
+            let mut rng = thread_rng();
+            rng.gen_range(MIN_FLOOR..=MAX_FLOOR)
+        };
+        Self{
+            cur_floor,
+            ..Default::default()
+        }
+    }
 }
 
 
