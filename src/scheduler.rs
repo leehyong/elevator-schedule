@@ -21,7 +21,14 @@ pub struct Scheduler {
 }
 
 lazy_static! {
-   pub static ref AllElevatorsMap: Arc<RwLock<HashMap<u8, Elevator>>> = Arc::new(RwLock::new(HashMap::with_capacity(MAX_ELEVATOR_NUM)));
+   // pub static ref AllElevatorsMap: Arc<RwLock<HashMap<u8, Elevator>>> = Arc::new(RwLock::new(HashMap::with_capacity(MAX_ELEVATOR_NUM)));
+   pub static ref AllElevatorsMap: HashMap<u8, Elevator> = {
+       let mut ret = HashMap::with_capacity(MAX_ELEVATOR_NUM);
+        for x in 0..MAX_ELEVATOR_NUM{
+            ret.insert(x as u8, Elevator::new(x as u8));
+        }
+        ret
+    };
 }
 
 impl Scheduler {
@@ -133,16 +140,7 @@ impl Scheduler {
             self.senders.insert(u, sender);
             self.handles.push(thread::spawn(
                 move || {
-                    let u = i as u8;
-                    let ele = Elevator::new(u);
-                    {
-                        let mut lock = AllElevatorsMap.write().unwrap();
-                        lock.insert(u, ele);
-                    }
-                    AllElevatorsMap
-                        .read()
-                        .unwrap()
-                        .get(&u)
+                    AllElevatorsMap.get(&u)
                         .unwrap()
                         .run(receiver, cx);
                 }));
