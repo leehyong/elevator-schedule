@@ -35,12 +35,11 @@ impl Scheduler {
         }
     }
     fn help_hint() {
-        println!("请按照以下格式以运行电梯,梯楼层范围:{}~{}，不在有效楼层，视为无效输入!", MIN_FLOOR, MAX_FLOOR);
+        println!("请按照以下格式以运行电梯,梯楼层范围:[{}~{}]，不在有效楼层，视为无效输入!", MIN_FLOOR, MAX_FLOOR);
         println!("\t10 上、10 up、10 u, 表示要从10楼上楼");
         println!("\t42 下、42 down、42 d, 表示要从42楼下楼");
         println!("\texit、e、退出, 表示推出当前程序\n");
         println!("\t一行可以有多个输入，用 ','或者'，'分隔, 表示同一时间有多个人想要乘电梯\n");
-
     }
 
     fn run_schedule(&self) {
@@ -89,28 +88,31 @@ impl Scheduler {
             let mut s = String::new();
             let mut op = String::new();
             let mut digit_done = false;
-            for ch in s1.chars(){
-                if !digit_done && ch.is_digit(10){
-                    s .push(ch);
-                }else{
+            for ch in s1.chars() {
+                if !digit_done && ch.is_digit(10) {
+                    s.push(ch);
+                } else {
                     digit_done = true;
-                    if !ch.is_whitespace(){
-                        op .push(ch);
+                    if !ch.is_whitespace() {
+                        op.push(ch);
                     }
                 }
             }
-            println!("{} - {}", s.parse::<i16>().unwrap_or(-10), op);
             match s.parse() {
                 Ok(v) => {
-                    match op.as_str(){
-                        "u" | "U" | "up" | "上" => {
-                            upstairs.push(v);
-                        }
-                        "d" | "D" | "down" | "下" => {
-                            downstairs.push(v);
-                        }
-                        _ => {
-                            println!("不支持的操作：{}", s1)
+                    if v < MIN_FLOOR || v > MAX_FLOOR {
+                        println!("楼层范围不对，请检查：[{}~{}]", MIN_FLOOR, MAX_FLOOR);
+                    } else {
+                        match op.as_str() {
+                            "u" | "U" | "up" | "上" => {
+                                upstairs.push(v);
+                            }
+                            "d" | "D" | "down" | "下" => {
+                                downstairs.push(v);
+                            }
+                            _ => {
+                                println!("不支持的操作：{}", s1)
+                            }
                         }
                     }
                 }
