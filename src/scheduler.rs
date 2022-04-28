@@ -147,7 +147,7 @@ impl Scheduler {
                 FloorType::Elevator(no) => {
                     let cx = self.senders.get(&no).unwrap();
                     // 一次 发送全部
-                    println!("[{}-下行]:{:?}", no, ups.clone());
+                    println!("[{}-上行]:{:?}", no, ups.clone());
                     cx.send(Message::Ups(ups.clone())).unwrap();
                 }
             }
