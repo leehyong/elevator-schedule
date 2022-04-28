@@ -160,11 +160,11 @@ impl Elevator {
     }
 
     fn handle_schedule_updown_floors(&self, floors: &[i16], send_to_schedule: Sender<Message>, is_up: bool) {
-        println!("[schedule]电梯#{},处理调度器安排的{}楼任务", self.no, if is_up {"上"}else{"下"});
+        println!("[schedule]电梯#{},处理调度器安排的{}楼任务", self.no, if is_up { "上" } else { "下" });
         // 处理调度器安排的上下楼任务
         for floor in floors {
             let mut plus = false;
-            let mut delta = 0 ;
+            let mut delta = 0;
             {
                 let mut lock = self.meta.write().unwrap();
                 let can_move = lock.can_in(Floor::Up(*floor));
@@ -208,18 +208,19 @@ impl Elevator {
                 }
             }
         }
-        self.handle_person_updown_floors(is_up);
+        // self.handle_person_updown_floors(is_up);
     }
 
-    fn handle_person_updown_floors(&self, is_up: bool) {
+    fn handle_person_updown_floors(&self) {
         // 处理用户输入的上下楼任务
         let mut meta = self.meta.write().unwrap();
-
+        let is_up = false;
         let mut floors: Vec<i16> = meta
             .stop_floors
             .iter()
             .map(|o| *o)
             .collect();
+        println!("[person]电梯#{}, floors {:?}", self.no, &floors);
         if floors.len() > 0 {
             while let Some(floor) = floors.pop() {
                 let mut diff = {

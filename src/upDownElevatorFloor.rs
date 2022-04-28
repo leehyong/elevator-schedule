@@ -80,6 +80,6 @@ impl Display for FloorType {
 
 impl Display for UpDownElevatorFloor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f , "[{}-{}]", self.floor, self.typ)
+        write!(f , "{}-{}", self.floor, self.typ)
     }
 }

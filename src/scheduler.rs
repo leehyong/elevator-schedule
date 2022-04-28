@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashSet, HashMap, BinaryHeap};
+use std::collections::{HashSet, HashMap, BinaryHeap, LinkedList};
 use std::io::{Read, BufRead};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -115,81 +115,95 @@ impl Scheduler {
             *lock1 = None;
             *lock2 = None;
         }
-        {
-
-        }
+        {}
     }
 
     fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) -> Vec<u8> {
         let mut ret = vec![];
-        let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
+        let mut floors = Vec::with_capacity(stairs.len() + elevators.len());
         // 使用 Reverse 构造顶堆
         for stair in stairs {
-            bh.push(Reverse(
-                UpDownElevatorFloor {
-                    floor: *stair,
-                    typ: FloorType::Person,
-                }
-            ))
+            floors.push(UpDownElevatorFloor {
+                floor: *stair,
+                typ: FloorType::Person,
+            });
         }
+
         for elevator in elevators {
-            let floor = elevator.meta.read().unwrap().cur_floor;
-            bh.push(Reverse(UpDownElevatorFloor {
-                floor,
+            floors.push(UpDownElevatorFloor {
+                floor: elevator.meta.read().unwrap().cur_floor,
                 typ: FloorType::Elevator(elevator.no),
-            }))
+            });
         }
-        let mut ups = vec![];
-        while let Some(item) = bh.pop() {
-            match item.0.typ {
+        floors.sort();
+        println!("up floors: {}",
+                 floors
+                     .iter()
+                     .rev()
+                     .map(|o| o.to_string())
+                     .collect::<Vec<_>>()
+                     .join(","));
+        let mut stas = LinkedList::new();
+        for floor in floors.iter().rev() {
+            match floor.typ {
                 FloorType::Person => {
-                    ups.push(item.0.floor);
+                    stas.push_front(floor.floor);
                 }
                 FloorType::Elevator(no) => {
-                    let cx = self.senders.get(&no).unwrap();
-                    // 一次 发送全部
-                    println!("[{}-上行]:{:?}", no, ups.clone());
-                    cx.send(Message::Ups(ups.clone())).unwrap();
-                    ups.clear();
-                    ret.push(no);
+                    if !stas.is_empty() {
+                        let cx = self.senders.get(&no).unwrap();
+                        // 一次 发送全部
+                        println!("[{}-上行]:{:?}", no, stas.clone());
+                        cx.send(Message::Ups(stas.iter().map(|o|*o).collect())).unwrap();
+                        ret.push(no);
+                        stas.clear();
+                    }
                 }
             }
         }
         ret
     }
 
-    fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator], usedElevators: &[u8]) {
-        let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
+    fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator], used_elevators: &[u8]) {
+        let mut floors = Vec::with_capacity(stairs.len() + elevators.len());
         // 使用 Reverse 构造大顶堆
         for stair in stairs {
-            bh.push(UpDownElevatorFloor {
+            floors.push(UpDownElevatorFloor {
                 floor: *stair,
                 typ: FloorType::Person,
             });
         }
         for elevator in elevators {
             let floor = elevator.meta.read().unwrap().cur_floor;
-            bh.push(UpDownElevatorFloor {
+            floors.push(UpDownElevatorFloor {
                 floor,
                 typ: FloorType::Elevator(elevator.no),
             });
         }
-        let mut ups = vec![];
-        while let Some(item) = bh.pop() {
+        floors.sort();
+        println!("down floors: {}",
+                 floors
+                     .iter()
+                     .rev()
+                     .map(|o| o.to_string())
+                     .collect::<Vec<_>>()
+                     .join(","));
+        let mut stas = vec![];
+        while let Some(item) = floors.pop() {
             match item.typ {
                 FloorType::Person => {
-                    ups.push(item.floor);
+                    stas.push(item.floor);
                 }
                 FloorType::Elevator(no) => {
-                    if usedElevators.contains(&no){
+                    if used_elevators.contains(&no) {
                         // 在上行的电梯不再，接收下行的指令
-                        continue
+                        continue;
                     }
                     let cx = self.senders.get(&no).unwrap();
                     // 一次 发送全部
-                    println!("[{}-下行]:{:?}", no, ups.clone());
-                    cx.send(Message::Downs(ups.clone())).unwrap();
-                    ups.clear();
+                    println!("[{}-下行]:{:?}", no, stas.clone());
+                    cx.send(Message::Downs(stas.clone())).unwrap();
+                    stas.clear();
                 }
             }
         }
@@ -259,8 +273,7 @@ impl Scheduler {
                     let cx = self.senders.get(&i).unwrap();
                     cx.send(InputtedFloor(i, floor)).unwrap();
                 }
-                _ => {
-                }
+                _ => {}
             }
         }
         Self::parse_input();
@@ -272,12 +285,12 @@ impl Scheduler {
         ((((MAX_FLOOR - MIN_FLOOR) >> 1) as usize) * MAX_ELEVATOR_NUM) as usize
     }
 
-    async fn handle_input(){
+    async fn handle_input() {
         {
             let mut up_lock = UpstairsStdInput.lock().unwrap();
             let mut down_lock = DownstairsStdInput.lock().unwrap();
             // 输入的内容还没处理完， 则等待
-            if up_lock.is_some() && down_lock.is_some() { return;}
+            if up_lock.is_some() && down_lock.is_some() { return; }
         }
         Self::help_hint();
         let mut input = String::new();
@@ -340,14 +353,15 @@ impl Scheduler {
         }
     }
 
-    fn parse_input(){
+    fn parse_input() {
         TokioRuntime.handle().block_on(async {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(1000)) =>  {
                     println!("No input, ignore!")
                 }
                _ = Self::handle_input() => { }
-            };
+            }
+            ;
         });
     }
 
