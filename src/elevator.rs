@@ -160,50 +160,45 @@ impl Elevator {
     }
 
     fn handle_schedule_updown_floors(&self, floors: &[i16], send_to_schedule: Sender<Message>, is_up: bool) {
-        println!("[schedule]电梯#{},处理调度器安排的上下楼任务", self.no);
+        println!("[schedule]电梯#{},处理调度器安排的{}楼任务", self.no, if is_up {"上"}else{"下"});
         // 处理调度器安排的上下楼任务
         for floor in floors {
-            let (can_move, mut diff) = {
-                let lock = self.meta.read().unwrap();
-                (lock.can_in(Floor::Up(*floor)), lock.diff_floor(*floor))
-            };
-            if can_move {
-                // 移动到指定楼层
-                {
-                    let mut lock = self.meta.write().unwrap();
+            let mut plus = false;
+            let mut delta = 0 ;
+            {
+                let mut lock = self.meta.write().unwrap();
+                let can_move = lock.can_in(Floor::Up(*floor));
+                let mut diff = lock.diff_floor(*floor);
+                if can_move {
+                    // 移动到指定楼层
                     if is_up {
                         lock.state = State::GoingUp;
                     } else {
                         lock.state = State::GoingDown;
                     }
-                }
-                // 通过 sleep 假装电梯在逐层运行
-                println!("[schedule]电梯#{},[{} -> {}]，请耐心等待...",
-                         self.no,
-                         self.meta.read().unwrap().cur_floor,
-                         floor,
-                );
-                // 通过 sleep 假装电梯在逐层运行
-                Self::fake_run(diff as u64);
-                let mut delta = 1u8;
-                let mut plus = false;
-                {
-                    let mut lock = self.meta.write().unwrap();
+                    // 通过 sleep 假装电梯在逐层运行
+                    println!("[schedule]电梯#{},[{} -> {}]，请耐心等待...",
+                             self.no,
+                             lock.cur_floor,
+                             floor,
+                    );
+                    // 通过 sleep 假装电梯在逐层运行
+                    Self::fake_run(diff as u64);
                     if is_up {
                         lock.state = State::GoingUpSuspend;
                     } else {
                         lock.state = State::GoingDownSuspend;
                     }
                     (plus, delta) = lock.set_person_num();
+                    println!("[schedule]电梯#{},[{} -> {}]，已完成!\t电梯开门...",
+                             self.no,
+                             lock.cur_floor,
+                             floor,
+                    );
                 }
-                println!("[schedule]电梯#{},[{} -> {}]，已完成!\t电梯开门...",
-                         self.no,
-                         self.meta.read().unwrap().cur_floor,
-                         floor,
-                );
                 // 等人进出电梯
                 Self::wait_and_close_door();
-                println!("[schedule]电梯#{}，关门...! {{{}-delta:{}}}", self.no, if plus {"上"}else{"下"}, delta);
+                println!("[schedule]电梯#{}，关门...! {{{}-delta:{}}}", self.no, if plus { "上" } else { "下" }, delta);
                 // 上人了才通知调度器， 用户进入了电梯，现在需要用户输入前往的楼层了
                 if plus && delta > 0 {
                     println!("[schedule]电梯#{}，请求用户输入楼层! delta:{}", self.no, delta);
@@ -218,9 +213,9 @@ impl Elevator {
 
     fn handle_person_updown_floors(&self, is_up: bool) {
         // 处理用户输入的上下楼任务
-        let mut floors: Vec<i16> = self.meta
-            .read()
-            .unwrap()
+        let mut meta = self.meta.write().unwrap();
+
+        let mut floors: Vec<i16> = meta
             .stop_floors
             .iter()
             .map(|o| *o)
@@ -228,41 +223,37 @@ impl Elevator {
         if floors.len() > 0 {
             while let Some(floor) = floors.pop() {
                 let mut diff = {
-                    let mut lock = self.meta.write().unwrap();
-                    lock.stop_floors.remove(&floor);
-                    lock.state = if is_up { State::GoingUp } else { State::GoingDown };
-                    lock.diff_floor(floor)
+                    meta.stop_floors.remove(&floor);
+                    meta.state = if is_up { State::GoingUp } else { State::GoingDown };
+                    meta.diff_floor(floor)
                 };
                 // 通过 sleep 假装电梯在逐层运行
                 println!("[person]电梯#{},[{} -> {}]，请耐心等待...",
                          self.no,
-                         self.meta.read().unwrap().cur_floor,
+                         meta.cur_floor,
                          floor,
                 );
                 Self::fake_run(diff as u64);
                 // 到了指定楼层，则等人进出电梯
                 {
-                    let mut lock = self.meta.write().unwrap();
-                    lock.stop_floors.remove(&floor);
+                    meta.stop_floors.remove(&floor);
                     if is_up {
-                        lock.state = State::GoingUpSuspend;
-                        lock.cur_floor += diff;
+                        meta.state = State::GoingUpSuspend;
+                        meta.cur_floor += diff;
                     } else {
-                        lock.state = State::GoingDownSuspend;
-                        lock.cur_floor -= diff;
+                        meta.state = State::GoingDownSuspend;
+                        meta.cur_floor -= diff;
                     }
                 };
                 println!("[person]电梯#{},[{} -> {}]，已完成!\t电梯开门...",
                          self.no,
-                         self.meta.read().unwrap().cur_floor,
+                         meta.cur_floor,
                          floor,
                 );
                 Self::wait_and_close_door();
-                println!("[person]电梯#{}，关门...!",
-                         self.no);
+                println!("[person]电梯#{}，关门...!", self.no);
             }
         }
-        let mut meta = self.meta.write().unwrap();
         assert_eq!(meta.stop_floors.len(), 0);
         meta.state = State::Stop;
     }

@@ -78,12 +78,10 @@ impl Scheduler {
         let upstairs;
         let downstairs;
         {
-            let mut lock = UpstairsStdInput.lock().unwrap();
-            upstairs = lock.as_ref().unwrap().clone();
-        }
-        {
-            let mut lock = DownstairsStdInput.lock().unwrap();
-            downstairs = lock.as_ref().unwrap().clone();
+            let mut lock1 = UpstairsStdInput.lock().unwrap();
+            upstairs = lock1.as_ref().unwrap().clone();
+            let mut lock2 = DownstairsStdInput.lock().unwrap();
+            downstairs = lock2.as_ref().unwrap().clone();
         }
         if upstairs.is_empty() && downstairs.is_empty() {
             // 无事可做
@@ -96,11 +94,10 @@ impl Scheduler {
         let mut downs = Vec::with_capacity(4);
         // 判定哪些电梯能去接人
         for elevator in AllElevatorsMap.values() {
-            // 能上行接人的电梯就不能下行接人；反之亦然.
-            // 所以这里是 if ... else if,而不是 if ... if
             if Self::can_elevator_up(&upstairs, elevator) {
                 ups.push(elevator);
-            } else if Self::cam_elevator_down(&downstairs, elevator) {
+            }
+            if Self::cam_elevator_down(&downstairs, elevator) {
                 downs.push(elevator);
             }
         }
@@ -109,20 +106,22 @@ impl Scheduler {
                  downs.iter().map(|o| o.to_string()).collect::<Vec<String>>().join("\n"));
 
         // 调度上行电梯
-        self.arrange_up_elevator(&upstairs, &ups);
+        let used_elevator = self.arrange_up_elevator(&upstairs, &ups);
         // 调度下行电梯
-        self.arrange_down_elevator(&downstairs, &downs);
+        self.arrange_down_elevator(&downstairs, &downs, &used_elevator);
         {
-            let mut lock = UpstairsStdInput.lock().unwrap();
-            *lock = None;
+            let mut lock1 = UpstairsStdInput.lock().unwrap();
+            let mut lock2 = DownstairsStdInput.lock().unwrap();
+            *lock1 = None;
+            *lock2 = None;
         }
         {
-            let mut lock = DownstairsStdInput.lock().unwrap();
-            *lock = None;
+
         }
     }
 
-    fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) {
+    fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) -> Vec<u8> {
+        let mut ret = vec![];
         let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
         // 使用 Reverse 构造大顶堆
         for stair in stairs {
@@ -149,12 +148,15 @@ impl Scheduler {
                     // 一次 发送全部
                     println!("[{}-上行]:{:?}", no, ups.clone());
                     cx.send(Message::Ups(ups.clone())).unwrap();
+                    ups.clear();
+                    ret.push(no);
                 }
             }
         }
+        ret
     }
 
-    fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) {
+    fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator], usedElevators: &[u8]) {
         let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
         // 使用 Reverse 构造小顶堆
         for stair in stairs {
@@ -177,6 +179,10 @@ impl Scheduler {
                     ups.push(item.0.floor);
                 }
                 FloorType::Elevator(no) => {
+                    if usedElevators.contains(&no){
+                        // 在上行的电梯不再，接收下行的指令
+                        continue
+                    }
                     let cx = self.senders.get(&no).unwrap();
                     // 一次 发送全部
                     println!("[{}-下行]:{:?}", no, ups.clone());
