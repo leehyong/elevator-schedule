@@ -123,25 +123,27 @@ impl Scheduler {
     fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) -> Vec<u8> {
         let mut ret = vec![];
         let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
-        // 使用 Reverse 构造大顶堆
+        // 使用 Reverse 构造顶堆
         for stair in stairs {
-            bh.push(UpDownElevatorFloor {
-                floor: *stair,
-                typ: FloorType::Person,
-            })
+            bh.push(Reverse(
+                UpDownElevatorFloor {
+                    floor: *stair,
+                    typ: FloorType::Person,
+                }
+            ))
         }
         for elevator in elevators {
             let floor = elevator.meta.read().unwrap().cur_floor;
-            bh.push(UpDownElevatorFloor {
+            bh.push(Reverse(UpDownElevatorFloor {
                 floor,
                 typ: FloorType::Elevator(elevator.no),
-            })
+            }))
         }
         let mut ups = vec![];
         while let Some(item) = bh.pop() {
-            match item.typ {
+            match item.0.typ {
                 FloorType::Person => {
-                    ups.push(item.floor);
+                    ups.push(item.0.floor);
                 }
                 FloorType::Elevator(no) => {
                     let cx = self.senders.get(&no).unwrap();
@@ -158,25 +160,25 @@ impl Scheduler {
 
     fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator], usedElevators: &[u8]) {
         let mut bh = BinaryHeap::with_capacity(stairs.len() + elevators.len());
-        // 使用 Reverse 构造小顶堆
+        // 使用 Reverse 构造大顶堆
         for stair in stairs {
-            bh.push(Reverse(UpDownElevatorFloor {
+            bh.push(UpDownElevatorFloor {
                 floor: *stair,
                 typ: FloorType::Person,
-            }))
+            });
         }
         for elevator in elevators {
             let floor = elevator.meta.read().unwrap().cur_floor;
-            bh.push(Reverse(UpDownElevatorFloor {
+            bh.push(UpDownElevatorFloor {
                 floor,
                 typ: FloorType::Elevator(elevator.no),
-            }))
+            });
         }
         let mut ups = vec![];
         while let Some(item) = bh.pop() {
-            match item.0.typ {
+            match item.typ {
                 FloorType::Person => {
-                    ups.push(item.0.floor);
+                    ups.push(item.floor);
                 }
                 FloorType::Elevator(no) => {
                     if usedElevators.contains(&no){
@@ -187,6 +189,7 @@ impl Scheduler {
                     // 一次 发送全部
                     println!("[{}-下行]:{:?}", no, ups.clone());
                     cx.send(Message::Downs(ups.clone())).unwrap();
+                    ups.clear();
                 }
             }
         }
