@@ -1,13 +1,17 @@
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Message {
     // 上到某楼层
     Up(i16),
+    // 上到某些楼层
+    Ups(Vec<i16>),
     // 下到某楼层
     Down(i16),
-    // 那台电梯正在输入楼层
+    // 下到某些楼层
+    Downs(Vec<i16>),
+    // 哪台电梯正在输入楼层
     InputtingFloor(u8),
-    // 那台电梯完成输入楼层
-    InputtedFloor(u8, &'static str, i16),
+    // 哪台电梯完成输入楼层
+    InputtedFloor(u8, i16),
     // 程序停止消息
     Quit,
 }

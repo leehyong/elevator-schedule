@@ -1,7 +1,11 @@
+#![feature(map_first_last)]
+
 use std::collections::BTreeSet;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{thread, time};
+use std::cmp::{max, min};
+use std::option::Option::Some;
 use std::thread::sleep;
 use crate::floor::Floor;
 use crate::state::State;
@@ -46,6 +50,21 @@ impl ElevatorMeta {
         } else {
             self.cur_floor - floor
         };
+    }
+
+    pub fn set_person_num(&mut self) -> (bool, u8) {
+        // 随机设置 上下电梯人数
+        let mut rng = thread_rng();
+        let num = rng.gen_range(1..=8);
+        // 加
+        let plus = rng.gen_bool(0.5f64);
+        if plus {
+            self.persons = min(self.persons.saturating_add(num), MAX_PERSON_CAPACITY);
+        } else {
+            // 减
+            self.persons = max(self.persons.saturating_sub(num), 0);
+        }
+        (plus, num)
     }
     // 判定是否可以再上人
     pub fn can_in(&self, floor: Floor) -> bool {
@@ -112,9 +131,9 @@ impl ElevatorMeta {
 // 电梯
 pub struct Elevator {
     // 电梯序号
-    no: u8,
+    pub no: u8,
     // 互斥量，需要用作电梯同步互斥的元数据；
-    meta: Arc<RwLock<ElevatorMeta>>,
+    pub meta: Arc<RwLock<ElevatorMeta>>,
 }
 
 impl Elevator {
@@ -125,8 +144,10 @@ impl Elevator {
         }
     }
 
-    fn fake_run() {
-        thread::sleep(time::Duration::from_millis(EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS as u64));
+    fn fake_run(nums: u64) {
+        if nums >0 {
+            thread::sleep(time::Duration::from_millis(EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS as u64 * nums));
+        }
     }
     pub fn sleep_run() {
         thread::sleep(time::Duration::from_millis(ELEVATOR_SLEEP_TIME_IN_MILLISECONDS as u64));
@@ -135,57 +156,127 @@ impl Elevator {
         thread::sleep(time::Duration::from_millis(SUSPEND_WAIT_IN_MILLISECONDS as u64));
     }
 
-    pub fn run(&self, rxFromSchedule: Receiver<Message>, sendTofSchedule: Sender<Message>) {
+    fn handle_schedule_updown_floors(&self, floors: &[i16], send_to_schedule: Sender<Message>, is_up: bool) {
+        // 处理调度器安排的上楼任务
+        for floor in floors {
+            let (can_move, mut diff) = {
+                let lock = self.meta.read().unwrap();
+                (lock.can_in(Floor::Up(*floor)), lock.diff_floor(*floor))
+            };
+            if can_move {
+                let mut lock;
+                // 移动到指定楼层
+                {
+                    lock = self.meta.write().unwrap();
+                    if is_up {
+                        lock.state = State::GoingUp;
+                    } else {
+                        lock.state = State::GoingDown;
+                    }
+                }
+                // 通过 sleep 假装电梯在逐层运行
+                Self::fake_run(diff as u64);
+                let mut delta = 1u8;
+                let mut plus = false;
+                {
+                    lock = self.meta.write().unwrap();
+                    if is_up {
+                        lock.state = State::GoingUpSuspend;
+                    } else {
+                        lock.state = State::GoingDownSuspend;
+                    }
+                    (plus, delta) = lock.set_person_num();
+                }
+                // 等人进出电梯
+                Self::wait_and_close_door();
+                // 上人了才通知调度器， 用户进入了电梯，现在需要用户输入前往的楼层了
+                if plus {
+                    for _ in 0..delta {
+                        send_to_schedule.send(Message::InputtingFloor(self.no)).unwrap();
+                    }
+                }
+            }
+        }
+        self.handle_person_updown_floors(is_up);
+    }
+
+    fn handle_person_updown_floors(&self, is_up: bool) {
+        // 处理用户输入的上下楼任务
+        let mut floors: Vec<i16> = self.meta
+            .read()
+            .unwrap()
+            .stop_floors
+            .iter()
+            .map(|o|*o)
+            .collect();
+        if floors.len() > 0 {
+            while let Some(floor) = floors.pop() {
+                let mut diff = {
+                    let mut lock = self.meta.write().unwrap();
+                    lock.stop_floors.remove(&floor);
+                    lock.state = if is_up { State::GoingUp } else { State::GoingDown };
+                    lock.diff_floor(floor)
+                };
+                // 通过 sleep 假装电梯在逐层运行
+                Self::fake_run(diff as u64);
+                // 到了指定楼层，则等人进出电梯
+                {
+                    let mut lock = self.meta.write().unwrap();
+                    lock.stop_floors.remove(&floor);
+                    if is_up {
+                        lock.state = State::GoingUpSuspend;
+                        lock.cur_floor += diff;
+                    } else {
+                        lock.state = State::GoingDownSuspend;
+                        lock.cur_floor -= diff;
+                    }
+                };
+                Self::wait_and_close_door();
+            }
+        }
+        let mut meta = self.meta.write().unwrap();
+        assert_eq!(meta.stop_floors.len(), 0);
+        meta.state = State::Stop;
+    }
+
+    pub fn run(&self, rx_from_schedule: Receiver<Message>, send_to_schedule: Sender<Message>) {
         use Message::*;
         loop {
-            if let Ok(msg) = rxFromSchedule.recv() {
+            if let Ok(msg) = rx_from_schedule.recv() {
                 match msg {
                     Quit => break,
                     Up(floor) => {
-                        let (can_going_up, mut diff) = {
-                            let lock = self.meta.read().unwrap();
-                            (lock.can_in(Floor::Up(floor)), lock.diff_floor(floor))
-                        };
-                        if can_going_up {
-                            let mut lock;
-                            // 上到指定楼层
-                            while diff > 0 {
-                                // 假装运行
-                                Self::fake_run();
-                                diff -= 1;
-                                {
-                                    lock = self.meta.write().unwrap();
-                                    lock.state = State::GoingUp;
-                                    lock.cur_floor += 1;
-                                }
-                            }
-                            // 等人进入电梯
-                            Self::wait_and_close_door();
-                            // todo, 在电梯输入想去楼， 电梯跑到指定楼层
-                        }
+                        self.handle_schedule_updown_floors(
+                            &vec![floor],
+                            send_to_schedule.clone(),
+                            true);
+                    }
+                    Ups(floors) => {
+                        self.handle_schedule_updown_floors(
+                            &floors,
+                            send_to_schedule.clone(),
+                            true);
+                    }
+                    InputtedFloor(no, floor) => {
+                        assert_eq!(no, self.no);
+                        println!("电梯[{},{}]-用户输入楼层：{}",
+                                 no,
+                                 self.meta.read().unwrap().cur_floor,
+                                 floor);
+                        let mut meta = self.meta.write().unwrap();
+                        meta.stop_floors.insert(floor);
                     }
                     Down(floor) => {
-                        let (can_going_down, mut diff) = {
-                            let lock = self.meta.read().unwrap();
-                            (lock.can_in(Floor::Down(floor)), lock.diff_floor(floor))
-                        };
-                        if can_going_down {
-                            let mut lock;
-                            // 下到指定楼层
-                            while diff > 0 {
-                                // 假装运行
-                                Self::fake_run();
-                                diff -= 1;
-                                {
-                                    lock = self.meta.write().unwrap();
-                                    lock.state = State::GoingDown;
-                                    lock.cur_floor -= 1;
-                                }
-                            }
-                            // 等人进入电梯
-                            Self::wait_and_close_door();
-                            // todo, 在电梯输入想去楼， 电梯跑到指定楼层
-                        }
+                        self.handle_schedule_updown_floors(
+                            &vec![floor],
+                            send_to_schedule.clone(),
+                            false);
+                    }
+                    Downs(floors) => {
+                        self.handle_schedule_updown_floors(
+                            &floors,
+                            send_to_schedule.clone(),
+                            false);
                     }
                     _ => {}
                 }
