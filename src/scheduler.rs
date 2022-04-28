@@ -74,6 +74,7 @@ impl Scheduler {
             // 无事可做
             return;
         }
+        println!("上 {:?}\n 下 {:?}", &upstairs, &downstairs);
         // 存放上行接人的电梯
         let mut ups = Vec::with_capacity(4);
         // 存放下行接人的电梯
@@ -88,6 +89,8 @@ impl Scheduler {
                 downs.push(elevator);
             }
         }
+        println!("电梯上行 {:?}\n 电梯下行 {:?}", &ups, &downs);
+
         // 调度上行电梯
         self.arrange_up_elevator(&upstairs, &ups);
         // 调度下行电梯

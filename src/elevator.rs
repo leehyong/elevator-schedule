@@ -14,6 +14,7 @@ use crate::message::Message;
 use rand::prelude::*;
 
 // 电梯元数据
+#[derive(Debug)]
 pub struct ElevatorMeta {
     // 当前电梯的人数
     pub persons: u8,
@@ -129,6 +130,7 @@ impl ElevatorMeta {
 }
 
 // 电梯
+#[derive(Debug)]
 pub struct Elevator {
     // 电梯序号
     pub no: u8,
