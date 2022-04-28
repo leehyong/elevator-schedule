@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashSet, HashMap, BinaryHeap};
-use std::io::Read;
+use std::io::{Read, BufRead};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::sync::mpsc::{Sender, channel, Receiver};
@@ -59,7 +59,6 @@ impl Scheduler {
         loop {
             self.response_elevator_msg();
             self.schedule_elevator();
-            Elevator::sleep_run();
         }
         // 等待子线程运行完
         for i in 0..MAX_ELEVATOR_NUM {
@@ -205,12 +204,19 @@ impl Scheduler {
                     let mut floor = 0i16;
                     let mut input = String::with_capacity(10);
                     loop {
-                        std::io::stdin().read_line(&mut input).unwrap();
-                        if let Ok(v) = input.parse() {
-                            println!("{}", v);
-                            if v >= MIN_FLOOR && v <= MAX_FLOOR {
-                                floor = v;
-                                break;
+                        {
+                            std::io::stdin().lock().read_line(&mut input).unwrap();
+                        }
+                        match input.trim().parse() {
+                            Ok(v) => {
+                                println!("{}", v);
+                                if v >= MIN_FLOOR && v <= MAX_FLOOR {
+                                    floor = v;
+                                    break;
+                                }
+                            }
+                            Err(e) =>{
+                                println!("{}", e)
                             }
                         }
                         println!("请重新输入楼层,范围:{}~{}！", MIN_FLOOR, MAX_FLOOR);
@@ -218,7 +224,9 @@ impl Scheduler {
                     let cx = self.senders.get(&i).unwrap();
                     cx.send(InputtedFloor(i, floor)).unwrap();
                 }
-                _ => {}
+                _ => {
+                    Elevator::sleep_run();
+                }
             }
         }
     }
@@ -232,7 +240,7 @@ impl Scheduler {
     fn parse_input() -> (Vec<i16>, Vec<i16>) {
         let mut input = String::new();
         {
-            std::io::stdin().read_line(&mut input).unwrap();
+            std::io::stdin().lock().read_line(&mut input).unwrap();
         }
         // HashSet 去重
         let mut upstairs = HashSet::with_capacity(Self::stair_capacity());
