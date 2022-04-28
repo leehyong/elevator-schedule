@@ -55,14 +55,9 @@ impl Scheduler {
     }
 
     fn _run(&self) {
-        Self::help_hint();
         loop {
             self.response_elevator_msg();
             self.schedule_elevator();
-        }
-        // 等待子线程运行完
-        for i in 0..MAX_ELEVATOR_NUM {
-            self.handles[i].join();
         }
     }
 
@@ -96,6 +91,7 @@ impl Scheduler {
         self.arrange_up_elevator(&upstairs, &ups);
         // 调度下行电梯
         self.arrange_down_elevator(&downstairs, &downs);
+
     }
 
     fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) {
@@ -238,6 +234,7 @@ impl Scheduler {
     }
 
     fn parse_input() -> (Vec<i16>, Vec<i16>) {
+        Self::help_hint();
         let mut input = String::new();
         {
             std::io::stdin().lock().read_line(&mut input).unwrap();
@@ -287,7 +284,6 @@ impl Scheduler {
                     println!("输入格式错误：{}", e)
                 }
             }
-            // let floor = s1.chars()[..end];
         }
         (upstairs.iter().map(|o|*o).collect(),
          downstairs.iter().map(|o|*o).collect())
@@ -308,5 +304,15 @@ impl Scheduler {
         }
         // 主线程运行调度器程序
         self._run();
+    }
+}
+
+impl Drop for Scheduler {
+    fn drop(&mut self) {
+        // 等待子线程运行完
+        println!("Scheduler drop");
+        for i in 0..MAX_ELEVATOR_NUM {
+            self.handles[i].join();
+        }
     }
 }
