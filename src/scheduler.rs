@@ -49,11 +49,11 @@ impl Scheduler {
         println!("\t一行可以有多个输入，用 ','或者'，'分隔, 表示同一时间有多个人想要乘电梯\n");
     }
 
-    fn run_schedule(&self) {
+    fn _run(&self) {
         Self::help_hint();
         loop {
             self.response_elevator_msg();
-            let (upstairs, downstairs) = Self::parse_input();
+            Self::schedule_elevator();
             Elevator::sleep_run();
         }
         // 等待子线程运行完
@@ -62,6 +62,14 @@ impl Scheduler {
         }
     }
 
+    fn schedule_elevator(){
+        // 调度电梯去接居民
+        let (upstairs, downstairs) = Self::parse_input();
+        if upstairs.is_empty() && downstairs.is_empty(){
+            // 无事可做
+            return;
+        }
+    }
 
     fn response_elevator_msg(&self) {
         use Message::*;
@@ -78,22 +86,28 @@ impl Scheduler {
         }
     }
 
+    const fn stair_capacity() -> usize{
+        // 根据经验每部同时乘电梯的楼层数一般不会超过半数，
+        // 所有乘电梯的楼层的容量
+        (((MAX_FLOOR - MIN_FLOOR) >> 1 ) * MAX_ELEVATOR_NUM)  as usize
+    }
+
     fn parse_input() -> (Vec<i16>, Vec<i16>) {
         let mut input = String::new();
         {
             std::io::stdin().read_line(&mut input).unwrap();
         }
-        let mut upstairs = vec![];
-        let mut downstairs = vec![];
+        let mut upstairs = Vec::with_capacity(Self::stair_capacity());
+        let mut downstairs = Vec::with_capacity(Self::stair_capacity());
         for item in input.split(|x| x == ',' || x == '，') {
-            let mut end = 0usize;
             // 去掉首尾空白
             let s1 = item.trim();
             if s1.is_empty() {
                 continue;
             }
-            let mut s = String::new();
-            let mut op = String::new();
+            // 避免一次性分配过多内存
+            let mut s = String::with_capacity(4);
+            let mut op = String::with_capacity(4);
             let mut digit_done = false;
             for ch in s1.chars() {
                 if !digit_done && ch.is_digit(10) {
@@ -146,6 +160,6 @@ impl Scheduler {
                 }));
         }
         // 主线程运行调度器程序
-        self.run_schedule();
+        self._run();
     }
 }
