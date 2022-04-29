@@ -8,7 +8,7 @@ use std::thread::{JoinHandle, Thread};
 use std::cmp::Reverse;
 use std::option::Option::Some;
 use std::time::Duration;
-use tokio::runtime::Runtime;
+// use tokio::runtime::Runtime;
 
 use crate::conf::*;
 use crate::elevator::Elevator;
@@ -37,13 +37,13 @@ lazy_static! {
         }
         ret
     };
-    static ref TokioRuntime: tokio::runtime::Runtime = {
-        // tokio::runtime::Builder::new_current_thread()
-        // .enable_all()
-        // .build()
-        // .unwrap()
-        tokio::runtime::Runtime::new().unwrap()
-    };
+    // static ref TokioRuntime: tokio::runtime::Runtime = {
+    //     // tokio::runtime::Builder::new_current_thread()
+    //     // .enable_all()
+    //     // .build()
+    //     // .unwrap()
+    //     tokio::runtime::Runtime::new().unwrap()
+    // };
     static ref UpstairsStdInput : Arc<Mutex<Option<Vec<i16>>>> = Arc::new(Mutex::new(None));
     static ref DownstairsStdInput : Arc<Mutex<Option<Vec<i16>>>> = Arc::new(Mutex::new(None));
 }
@@ -116,7 +116,6 @@ impl Scheduler {
             *lock1 = None;
             *lock2 = None;
         }
-        {}
     }
 
     fn arrange_up_elevator(&self, stairs: &[i16], elevators: &[&Elevator]) -> Vec<u8> {
@@ -283,7 +282,7 @@ impl Scheduler {
         ((((MAX_FLOOR - MIN_FLOOR) >> 1) as usize) * MAX_ELEVATOR_NUM) as usize
     }
 
-    async fn handle_input() {
+    fn handle_input() {
         {
             let mut up_lock = UpstairsStdInput.lock().unwrap();
             let mut down_lock = DownstairsStdInput.lock().unwrap();
@@ -354,15 +353,16 @@ impl Scheduler {
     }
 
     fn parse_input() {
-        TokioRuntime.handle().block_on(async {
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_millis(1000)) =>  {
-                    println!("No input, ignore!")
-                }
-               _ = Self::handle_input() => { }
-            }
-            ;
-        });
+        Self::handle_input();
+        // TokioRuntime.handle().block_on(async {
+        //     tokio::select! {
+        //         _ = tokio::time::sleep(Duration::from_millis(1000)) =>  {
+        //             println!("No input, ignore!")
+        //         }
+        //        _ = Self::handle_input() => { }
+        //     }
+        //     ;
+        // });
     }
 
     pub fn run(&mut self) {
