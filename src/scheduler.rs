@@ -210,8 +210,9 @@ impl Scheduler {
     fn can_elevator_up(stairs: &[i16], elevator: &Elevator) -> bool {
         // 返回某电梯是否能上去接人
         let meta = elevator.meta.read().unwrap();
+        let state = elevator.state.read().unwrap();
         use State::*;
-        match meta.state {
+        match *state {
             // 维护中、下行的、下行中在上下人的肯定不能上去接人
             Maintaining | GoingDown | GoingDownSuspend => return false,
             Stop | GoingUp | GoingUpSuspend => {
@@ -226,8 +227,9 @@ impl Scheduler {
     fn can_elevator_down(stairs: &[i16], elevator: &Elevator) -> bool {
         // 返回某电梯是否能下去接人
         let meta = elevator.meta.read().unwrap();
+        let state = elevator.state.read().unwrap();
         use State::*;
-        match meta.state {
+        match *state {
             // 维护中、上行的、上行中在上下人的肯定不能下去接人
             Maintaining | GoingUp | GoingUpSuspend => return false,
             Stop | GoingDown | GoingDownSuspend => {
