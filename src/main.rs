@@ -7,14 +7,18 @@ pub mod scheduler;
 pub mod conf;
 pub mod message;
 pub mod up_down_elevator_floor;
+pub mod app;
+pub mod style;
+pub mod floor_btn;
 
 
 use std::io::{Read, Write};
 use scheduler::Scheduler;
 
 fn main() {
-   let mut schedule = Scheduler::new();
-    schedule.run();
+   // let mut schedule = Scheduler::new();
+   //  schedule.run();
+    app::run_window()
     // for x in "尾是发发发fy̆发发发".chars(){
     //     println!("{}", x);
     // }

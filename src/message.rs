@@ -15,6 +15,16 @@ pub enum Message {
     // 程序停止消息
     Quit,
 }
+#[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
+pub enum UiMessage{
+    Noop,
+    SliderChange(i16),
+    ClickedBtnPlus,
+    ClickedBtnSubtract,
+    ClickedBtnUp,
+    ClickedBtnDown,
+    ClickedBtnFloor(u8,i16)
+}
 
 impl Default for Message {
     fn default() -> Self {
