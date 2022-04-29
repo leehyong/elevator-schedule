@@ -69,6 +69,7 @@ impl Scheduler {
     fn _run(&self) {
         loop {
             self.response_elevator_msg();
+            Self::parse_input();
             self.schedule_elevator();
         }
     }
@@ -97,7 +98,7 @@ impl Scheduler {
             if Self::can_elevator_up(&upstairs, elevator) {
                 ups.push(elevator);
             }
-            if Self::cam_elevator_down(&downstairs, elevator) {
+            if Self::can_elevator_down(&downstairs, elevator) {
                 downs.push(elevator);
             }
         }
@@ -226,7 +227,7 @@ impl Scheduler {
             }
         }
     }
-    fn cam_elevator_down(stairs: &[i16], elevator: &Elevator) -> bool {
+    fn can_elevator_down(stairs: &[i16], elevator: &Elevator) -> bool {
         // 返回某电梯是否能下去接人
         let meta = elevator.meta.read().unwrap();
         use State::*;
@@ -276,7 +277,6 @@ impl Scheduler {
                 _ => {}
             }
         }
-        Self::parse_input();
     }
 
     const fn stair_capacity() -> usize {
@@ -370,6 +370,7 @@ impl Scheduler {
             let cx = self.cxOneToMany.clone();
             let (sender, receiver) = channel();
             let u = i as u8;
+            println!("电梯#{}-{}层", u, AllElevatorsMap.get(&u).unwrap().meta.read().unwrap().cur_floor);
             self.senders.insert(u, sender);
             self.handles.push(thread::spawn(
                 move || {
