@@ -60,8 +60,8 @@ impl Scheduler {
     }
     fn help_hint() {
         println!("请按照以下格式以运行电梯,梯楼层范围:[{}~{}]，不在有效楼层，视为无效输入!", MIN_FLOOR, MAX_FLOOR);
-        println!("\t10 上、10 up、10 u, 表示要从10楼上楼");
-        println!("\t42 下、42 down、42 d, 表示要从42楼下楼");
+        println!("\t10上、10up、10u, 表示要从10楼上楼");
+        println!("\t42下、42down、42d, 表示要从42楼下楼");
         println!("\texit、e、退出, 表示推出当前程序\n");
         println!("\t一行可以有多个输入，用 ','或者'，'分隔, 表示同一时间有多个人想要乘电梯\n");
     }
@@ -136,16 +136,15 @@ impl Scheduler {
                 typ: FloorType::Elevator(elevator.no),
             });
         }
-        floors.sort();
+        floors.sort_by(|a, b|b.cmp(a));
         println!("up floors: {}",
                  floors
                      .iter()
-                     .rev()
                      .map(|o| o.to_string())
                      .collect::<Vec<_>>()
                      .join(","));
         let mut stas = LinkedList::new();
-        for floor in floors.iter().rev() {
+        for floor in floors.iter() {
             match floor.typ {
                 FloorType::Person => {
                     stas.push_front(floor.floor);
@@ -153,8 +152,8 @@ impl Scheduler {
                 FloorType::Elevator(no) => {
                     if !stas.is_empty() {
                         let cx = self.senders.get(&no).unwrap();
+                        println!("[电梯#{}-上行]:{:?}", no, stas.clone());
                         // 一次 发送全部
-                        println!("[{}-上行]:{:?}", no, stas.clone());
                         cx.send(Message::Ups(stas.iter().map(|o|*o).collect())).unwrap();
                         ret.push(no);
                         stas.clear();
@@ -168,13 +167,13 @@ impl Scheduler {
     fn arrange_down_elevator(&self, stairs: &[i16], elevators: &[&Elevator], used_elevators: &[u8]) {
         let mut floors = Vec::with_capacity(stairs.len() + elevators.len());
         // 使用 Reverse 构造大顶堆
-        for stair in stairs {
+        for stair in stairs{
             floors.push(UpDownElevatorFloor {
                 floor: *stair,
                 typ: FloorType::Person,
             });
         }
-        for elevator in elevators {
+        for elevator in elevators.iter().filter(|o|!used_elevators.contains(&o.no))  {
             let floor = elevator.meta.read().unwrap().cur_floor;
             floors.push(UpDownElevatorFloor {
                 floor,
@@ -185,7 +184,6 @@ impl Scheduler {
         println!("down floors: {}",
                  floors
                      .iter()
-                     .rev()
                      .map(|o| o.to_string())
                      .collect::<Vec<_>>()
                      .join(","));
@@ -196,13 +194,12 @@ impl Scheduler {
                     stas.push(item.floor);
                 }
                 FloorType::Elevator(no) => {
-                    if used_elevators.contains(&no) {
-                        // 在上行的电梯不再，接收下行的指令
-                        continue;
-                    }
+
                     let cx = self.senders.get(&no).unwrap();
-                    // 一次 发送全部
-                    println!("[{}-下行]:{:?}", no, stas.clone());
+                    // 排序
+                    stas.sort_by(|a,b|b.cmp(a));
+                    // 一次发送全部
+                    println!("[电梯#{}-下行]:{:?}", no, stas.clone());
                     cx.send(Message::Downs(stas.clone())).unwrap();
                     stas.clear();
                 }
