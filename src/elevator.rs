@@ -210,11 +210,7 @@ impl Elevator {
                 };
                 if let Some(first) = first_floor {
                     let cur_floor = self.meta.read().unwrap().cur_floor;
-                    if first == cur_floor {
-                        println!("楼层 {} == {}", first, cur_floor);
-                        return None;
-                    }
-                    is_up = first > cur_floor;
+                    is_up = first >= cur_floor;
                     {
                         let mut lock = self.state.write().unwrap();
                         if is_up {
@@ -239,8 +235,7 @@ impl Elevator {
         Some(is_up)
     }
     fn handle_person_updown_floors(&self) {
-        let floors = self.stop_floors.read().unwrap();
-        if floors.is_empty() {
+        if self.stop_floors.read().unwrap().is_empty() {
             // println!("[person]电梯#{}-{}层, 没有任务", self.no, self.meta.read().unwrap().cur_floor);
             Self::sleep_run();
             return;
@@ -381,7 +376,7 @@ impl Display for Elevator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let meta = self.meta.read().unwrap();
         write!(f,
-               "电梯#{}, \n\t{}人,在{}层, {}\n",
+               "电梯[#{}-{}人-{}层-{}]",
                self.no,
                meta.persons,
                meta.cur_floor,

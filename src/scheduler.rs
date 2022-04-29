@@ -252,8 +252,11 @@ impl Scheduler {
                     let mut input = String::with_capacity(10);
                     loop {
                         {
-                            print!("请输入楼层:> ");
-                            std::io::stdout().flush().unwrap();
+                            {
+                                let elevator = AllElevatorsMap.get(&i).unwrap();
+                                print!("{},请输入:> ", elevator.to_string());
+                                std::io::stdout().flush().unwrap();
+                            }
                             std::io::stdin().lock().read_line(&mut input).unwrap();
                         }
                         match input.trim().parse() {
