@@ -6,9 +6,10 @@ pub mod state;
 pub mod scheduler;
 pub mod conf;
 pub mod message;
-pub mod upDownElevatorFloor;
+pub mod up_down_elevator_floor;
 
 
+use std::io::{Read, Write};
 use scheduler::Scheduler;
 
 fn main() {
@@ -20,5 +21,10 @@ fn main() {
     //     println!("{}", "尾是发发发fy̆发发发".chars().take(2).next().unwrap());
     // let four: u32 = "4gg".parse().unwrap();
     // println!("{}", four);
+    // print!("请输入姓名:>");
+    // std::io::stdout().flush().unwrap();
+    // let mut input = String::new();
+    // std::io::stdin().read_line(&mut input).unwrap();
+    // println!("输入的是：{}", input)
 }
 

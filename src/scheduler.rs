@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashSet, HashMap, BinaryHeap, LinkedList};
-use std::io::{Read, BufRead};
+use std::io::{Read, BufRead, Write};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::sync::mpsc::{Sender, channel, Receiver};
@@ -14,7 +14,7 @@ use crate::conf::*;
 use crate::elevator::Elevator;
 use crate::message::Message;
 use crate::state::State;
-use crate::upDownElevatorFloor::*;
+use crate::up_down_elevator_floor::*;
 
 
 // 电梯算法调度器
@@ -254,11 +254,12 @@ impl Scheduler {
                     let mut input = String::with_capacity(10);
                     loop {
                         {
+                            print!("请输入楼层:> ");
+                            std::io::stdout().flush().unwrap();
                             std::io::stdin().lock().read_line(&mut input).unwrap();
                         }
                         match input.trim().parse() {
                             Ok(v) => {
-                                println!("input.trim: {}", v);
                                 if v >= MIN_FLOOR && v <= MAX_FLOOR {
                                     floor = v;
                                     break;
@@ -295,6 +296,8 @@ impl Scheduler {
         Self::help_hint();
         let mut input = String::new();
         {
+            print!("按照提示的数据格式\n请输入电梯数据:> ");
+            std::io::stdout().flush().unwrap();
             std::io::stdin().lock().read_line(&mut input).unwrap();
         }
         // HashSet 去重
