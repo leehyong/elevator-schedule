@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::{BTreeMap, HashMap};
+use std::time::Instant;
 use crate::message::*;
 use iced::*;
 use iced::futures::SinkExt;
+use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
 use crate::floor_btn::FloorBtnState;
 
@@ -25,11 +27,13 @@ impl Default for ElevatorApp {
             hp.insert(no, (MIN_FLOOR..=MAX_FLOOR)
                 .into_iter()
                 .filter(|o| *o != 0)
-                .map(|o| FloorBtnState {
-                    floor: o,
-                    elevator_no: no as u8,
-                    state: button::State::default(),
-                }).collect());
+                .map(|o|
+                    {
+                        let mut btn_state = FloorBtnState::default();
+                        btn_state.elevator_no = no as u8;
+                        btn_state.floor = o;
+                        btn_state
+                    }).collect());
         }
         Self {
             floor: 1,
@@ -65,6 +69,21 @@ impl ElevatorApp {
             rows + 1
         }
     }
+    fn gen_random_floor() -> i16 {
+        let mut rng = thread_rng();
+        rng.gen_range(1..=MAX_FLOOR)
+    }
+
+    fn set_random_floor(&mut self) {
+        loop {
+            let f = Self::gen_random_floor();
+            if f != self.floor {
+                self.floor = f;
+                // 直到生产一个不同的楼层才终止循环。
+                break;
+            }
+        }
+    }
 }
 
 impl Application for ElevatorApp {
@@ -87,29 +106,48 @@ impl Application for ElevatorApp {
                     self.floor = floor;
                 }
             }
-            UiMessage::ClickedBtnPlus =>{
+            UiMessage::ClickedBtnPlus => {
                 if self.floor == -1 {
                     self.floor = 1
-                }else{
+                } else {
                     self.floor += 1
                 }
             }
-            UiMessage::ClickedBtnSubtract =>{
+            UiMessage::ClickedBtnSubtract => {
                 if self.floor == 1 {
                     self.floor = -1
-                }else{
+                } else {
                     self.floor -= 1
                 }
             }
             UiMessage::ClickedBtnUp => {
                 println!("{:?}", message);
+                self.set_random_floor();
             }
             UiMessage::ClickedBtnDown => {
                 println!("{:?}", message);
+                self.set_random_floor();
             }
-            UiMessage::ClickedBtnFloor(no, floor) =>{
+            UiMessage::ClickedBtnFloor(no, floor) => {
+                let btn = self.elevator_btns
+                    .get_mut(&(no as usize))
+                    .unwrap()
+                    .iter_mut()
+                    .find(|o| o.floor == floor)
+                    .unwrap();
+                if let Some(inst) = btn.last_pressed{
+                    // 在200毫秒内连续点击了多次，就认为是双击了
+                    if inst.elapsed().as_micros() < 1000_000 {
+                        btn.is_active = false;
+                    }else{
+                        btn.is_active = true;
+                    }
+                    btn.last_pressed = None
+                } else{
+                    btn.is_active = true;
+                    btn.last_pressed = Some(Instant::now());
+                }
                 println!("电梯#{},按了{}层", no, floor);
-
             }
             _ => {}
         }
@@ -134,10 +172,12 @@ impl Application for ElevatorApp {
         let up_btn_row = Row::with_children(vec![
             Button::new(&mut self.up_btn_state, Text::new("上"))
                 .on_press(UiMessage::ClickedBtnUp)
+                .width(Length::Units(30))
                 .into(),
             Space::with_width(Length::Units(10)).into(),
             Button::new(&mut self.down_btn_state, Text::new("下"))
                 .on_press(UiMessage::ClickedBtnDown)
+                .width(Length::Units(30))
                 .into(),
         ]).width(Length::FillPortion(1))
             .spacing(10).into();
@@ -145,14 +185,14 @@ impl Application for ElevatorApp {
         subs.push(Button::new(&mut self.subtract_btn_state, Text::new("-"))
                       .width(Length::Units(20))
                       .on_press(UiMessage::ClickedBtnSubtract)
-                      .into(),);
+                      .into(), );
         subs.push(Space::with_width(Length::Units(5)).into());
         subs.push(slider);
         subs.push(Space::with_width(Length::Units(5)).into());
         subs.push(Button::new(&mut self.plus_btn_state, Text::new("+"))
                       .width(Length::Units(20))
                       .on_press(UiMessage::ClickedBtnPlus)
-                      .into(),);
+                      .into(), );
         subs.push(Space::with_width(Length::Units(20)).into());
         subs.push(e);
         subs.push(Space::with_width(Length::Units(4)).into());
@@ -168,7 +208,7 @@ impl Application for ElevatorApp {
         ];
         let new_rows = self.elevator_btns
             .iter_mut()
-            .fold( rows, |mut _rows, (elevator_no, floors) |{
+            .fold(rows, |mut _rows, (elevator_no, floors)| {
                 let status = Column::with_children(vec![
                     Row::with_children(vec![
                         Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
@@ -198,9 +238,9 @@ impl Application for ElevatorApp {
                           |mut row, (ix, floor)| {
                               row.push(floor.floor_view());
                               row
-                          }){
+                          }) {
                     if i % BTN_PER_ROW == 0 {
-                        if !tmp_row.is_empty(){
+                        if !tmp_row.is_empty() {
                             row_floors.push(Row::with_children(
                                 tmp_row.drain(0..tmp_row.len()).collect())
                                 .spacing(10)
@@ -208,12 +248,12 @@ impl Application for ElevatorApp {
                                 .into()
                             );
                         }
-                    }else{
+                    } else {
                         tmp_row.push(f);
                     }
                     i += 1;
                 }
-                if !tmp_row.is_empty(){
+                if !tmp_row.is_empty() {
                     row_floors.push(Row::with_children(
                         tmp_row.drain(0..tmp_row.len()).collect())
                         .spacing(10)
@@ -226,10 +266,10 @@ impl Application for ElevatorApp {
                     .into();
                 _rows.push(Row::with_children(vec![
                     status,
-                    elevator_floors
+                    elevator_floors,
                 ]).into());
                 _rows
-        });
+            });
         Column::with_children(new_rows)
             .spacing(30)
             .height(Length::Fill)
