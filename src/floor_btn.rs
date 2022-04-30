@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 use iced::*;
 use iced::button::StyleSheet;
+use crate::icon::*;
 use crate::conf::{MAX_FLOOR, MIN_FLOOR};
 use crate::message::UiMessage;
 use crate::style::{ActiveFloorBtnStyle, ActiveFloorTxtStyle};
@@ -63,8 +64,14 @@ pub struct WaitFloorTxtState {
 impl WaitFloorTxtState {
     pub fn floor_view(&mut self) -> Element<UiMessage> {
         Container::new(
-            Text::new(format!("{} {}", self.floor, self.direction.to_string()))
-                .horizontal_alignment(HorizontalAlignment::Center)
+            Row::with_children(vec![
+                Text::new(format!("{}", self.floor))
+                    .horizontal_alignment(HorizontalAlignment::Center).into(),
+                match self.direction {
+                    Direction::Up => up_icon().into(),
+                    Direction::Down => down_icon().into(),
+                }
+            ])
         ).width(Length::Units(50))
             .align_x(Align::Center)
             .style(ActiveFloorTxtStyle::default())

@@ -9,6 +9,7 @@ use iced::futures::SinkExt;
 use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
+use crate::icon::*;
 
 
 struct ElevatorApp {
@@ -198,26 +199,28 @@ impl Application for ElevatorApp {
             .into();
 
         let up_btn_row = Row::with_children(vec![
-            Button::new(&mut self.up_btn_state, Text::new("上"))
+            Button::new(&mut self.up_btn_state, up_icon()
+                .color(Color::from_rgb8(255, 0, 0)))
                 .on_press(UiMessage::ClickedBtnUp)
                 .width(Length::Units(30))
                 .into(),
             Space::with_width(Length::Units(10)).into(),
-            Button::new(&mut self.down_btn_state, Text::new("下"))
+            Button::new(&mut self.down_btn_state, down_icon()
+                .color(Color::from_rgb8(0, 0, 255)))
                 .on_press(UiMessage::ClickedBtnDown)
                 .width(Length::Units(30))
                 .into(),
         ]).width(Length::FillPortion(1))
             .spacing(10).into();
 
-        subs.push(Button::new(&mut self.subtract_btn_state, Text::new("-"))
+        subs.push(Button::new(&mut self.subtract_btn_state, subtract_icon())
                       .width(Length::Units(20))
                       .on_press(UiMessage::ClickedBtnSubtract)
                       .into(), );
         subs.push(Space::with_width(Length::Units(5)).into());
         subs.push(slider);
         subs.push(Space::with_width(Length::Units(5)).into());
-        subs.push(Button::new(&mut self.plus_btn_state, Text::new("+"))
+        subs.push(Button::new(&mut self.plus_btn_state, plus_icon())
                       .width(Length::Units(20))
                       .on_press(UiMessage::ClickedBtnPlus)
                       .into(), );

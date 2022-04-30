@@ -10,6 +10,7 @@ pub mod up_down_elevator_floor;
 pub mod app;
 pub mod style;
 pub mod floor_btn;
+pub mod icon;
 
 
 use std::io::{Read, Write};
