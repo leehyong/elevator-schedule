@@ -161,19 +161,20 @@ impl Application for ElevatorApp {
                     .iter_mut()
                     .find(|o| o.floor == floor)
                     .unwrap();
+                // todo:  由于iced 的Button没有双击事件，此处无法正确模拟双击， 留待以后再解决 双击取消某楼层
                 if let Some(inst) = btn.last_pressed {
-                    // 在200毫秒内连续点击了多次，就认为是双击了
-                    if inst.elapsed().as_micros() < 1000_000 {
+                    // 在一定毫秒内毫秒内连续点击了多次，就认为是双击了
+                    println!("inst.elapsed().as_millis() < 1000_000 : {}, {}", inst.elapsed().as_millis() < 1000_000, inst.elapsed().as_micros());
+                    if inst.elapsed().as_millis() < 1000 {
                         btn.is_active = false;
-                    } else {
-                        btn.is_active = true;
                     }
                     btn.last_pressed = None
                 } else {
                     btn.is_active = true;
                     btn.last_pressed = Some(Instant::now());
                 }
-                println!("电梯#{},按了{}层", no, floor);
+                // println!("电梯#{},按了{}层, {}, {:?}", no, floor, btn.is_active, btn.last_pressed);
+                println!("电梯#{},按了{}层,", no, floor);
             }
             _ => {}
         }
