@@ -21,24 +21,27 @@ struct ElevatorApp {
     plus_btn_state: button::State,
     subtract_btn_state: button::State,
     down_btn_state: button::State,
-    elevator_btns: BTreeMap<usize, Vec<FloorBtnState>>,
+    // 电梯里的按钮
+    elevator_btns: Vec<Vec<FloorBtnState>>,
+    // 哪些楼层需要安排电梯去接人的
     wait_floors: LinkedList<WaitFloorTxtState>,
 }
 
 impl Default for ElevatorApp {
     fn default() -> Self {
-        let mut hp = BTreeMap::new();
-        for no in 1..=MAX_ELEVATOR_NUM {
-            hp.insert(no, (MIN_FLOOR..=MAX_FLOOR)
-                .into_iter()
-                .filter(|o| *o != 0)
-                .map(|o|
-                    {
-                        let mut btn_state = FloorBtnState::default();
-                        btn_state.elevator_no = no as u8;
-                        btn_state.floor = o;
-                        btn_state
-                    }).collect());
+        let mut hp = Vec::with_capacity(MAX_ELEVATOR_NUM as usize);
+        for no in 0..MAX_ELEVATOR_NUM {
+            hp.push(
+                (MIN_FLOOR..=MAX_FLOOR)
+                    .into_iter()
+                    .filter(|o| *o != 0)
+                    .map(|o|
+                        {
+                            let mut btn_state = FloorBtnState::default();
+                            btn_state.elevator_no = no as u8;
+                            btn_state.floor = o;
+                            btn_state
+                        }).collect());
         }
         Self {
             floor: 1,
@@ -66,7 +69,7 @@ pub fn run_window() {
 
 const BTN_PER_ROW: i16 = 15;
 const WAIT_FLOOR_PER_ROW: i16 = 16;
-const MAX_WAIT_FLOOR_ROW_NUM:i16 = 4;
+const MAX_WAIT_FLOOR_ROW_NUM: i16 = 4;
 const MAX_WAIT_FLOOR_NUM: usize = (BTN_PER_ROW * MAX_WAIT_FLOOR_ROW_NUM) as usize;
 
 impl ElevatorApp {
@@ -107,7 +110,7 @@ impl ElevatorApp {
         };
         if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() && !self.wait_floors.contains(&fi) {
             self.wait_floors.push_back(fi);
-        }else {
+        } else {
             println!("电梯繁忙，请稍后再试,{}", self.floor);
         }
     }
@@ -166,9 +169,7 @@ impl Application for ElevatorApp {
                 self.set_random_floor();
             }
             UiMessage::ClickedBtnFloor(no, floor) => {
-                let btn = self.elevator_btns
-                    .get_mut(&(no as usize))
-                    .unwrap()
+                let btn = self.elevator_btns[no as usize]
                     .iter_mut()
                     .find(|o| o.floor == floor)
                     .unwrap();
@@ -185,7 +186,7 @@ impl Application for ElevatorApp {
                     btn.last_pressed = Some(Instant::now());
                 }
                 // println!("电梯#{},按了{}层, {}, {:?}", no, floor, btn.is_active, btn.last_pressed);
-                println!("电梯#{},按了{}层,", no, floor);
+                println!("电梯#{},按了{}层,", no + 1, floor);
             }
             _ => {}
         }
@@ -301,19 +302,20 @@ impl Application for ElevatorApp {
         ];
         let new_rows = self.elevator_btns
             .iter_mut()
+            .enumerate()
             .fold(rows, |mut _rows, (elevator_no, floors)| {
                 let status = Column::with_children(vec![
                     Row::with_children(vec![
                         Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", elevator_no)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", elevator_no + 1)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("运行状态:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}运行中", elevator_no)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}运行中", elevator_no + 1)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", elevator_no)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", elevator_no + 1)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("人数:").width(Length::FillPortion(1)).into(),
