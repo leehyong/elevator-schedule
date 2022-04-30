@@ -10,6 +10,7 @@ use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 use crate::icon::*;
+use crate::up_down_elevator_floor::FloorType::Person;
 
 
 struct ElevatorApp {
@@ -64,11 +65,18 @@ pub fn run_window() {
 }
 
 const BTN_PER_ROW: i16 = 15;
+const WAIT_FLOOR_PER_ROW: i16 = 16;
+const MAX_WAIT_FLOOR_ROW_NUM:i16 = 4;
+const MAX_WAIT_FLOOR_NUM: usize = (BTN_PER_ROW * MAX_WAIT_FLOOR_ROW_NUM) as usize;
 
 impl ElevatorApp {
     const fn floor_rows() -> i16 {
-        let rows = (MAX_FLOOR - MIN_FLOOR) / BTN_PER_ROW;
-        let m = (MAX_FLOOR - MIN_FLOOR) % BTN_PER_ROW;
+        Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
+    }
+
+    const fn calc_rows2(total: i16, per: i16) -> i16 {
+        let rows = total / per;
+        let m = total % per;
         if m == 0 {
             rows
         } else {
@@ -97,8 +105,10 @@ impl ElevatorApp {
             floor: self.floor,
             direction,
         };
-        if !self.wait_floors.contains(&fi) {
+        if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() && !self.wait_floors.contains(&fi) {
             self.wait_floors.push_back(fi);
+        }else {
+            println!("电梯繁忙，请稍后再试,{}", self.floor);
         }
     }
 }
@@ -234,24 +244,54 @@ impl Application for ElevatorApp {
         let mut rows = vec![
             Column::with_children(vec![
                 Row::with_children(subs)
-                    .padding(20)
+                    .padding(10)
                     .width(Length::Fill)
                     .align_items(Align::Center).into(),
-                Row::with_children(vec![
-                    Text::new("等待的楼层:").into(),
-                    self.
-                        wait_floors
-                        .iter_mut()
-                        .fold(Row::new(), |row, txt| {
-                            row.push(txt.floor_view())
-                        })
-                        .spacing(6)
-                        .into(),
-                ])
-                    .padding(20)
-                    .spacing(10)
+                Container::new(Row::with_children(
+                    vec![
+                        Container::new(
+                            Text::new("等待的楼层:"))
+                            .height(Length::Fill)
+                            .align_x(Align::Center)
+                            .align_y(Align::Center)
+                            .into(),
+                        {
+                            let mut i = 1;
+                            let mut rows = vec![];
+                            let mut row_elements = vec![];
+                            for f in self.
+                                wait_floors
+                                .iter_mut()
+                                .fold(vec![], |mut row, txt| {
+                                    row.push(txt.floor_view());
+                                    row
+                                }) {
+                                row_elements.push(f);
+                                if i % WAIT_FLOOR_PER_ROW == 0 {
+                                    rows.push(Row::with_children(row_elements
+                                        .drain(0..row_elements
+                                            .len()).collect())
+                                        .padding(4)
+                                        .spacing(6)
+                                        .into())
+                                }
+                                i += 1;
+                            }
+                            if !row_elements.is_empty() {
+                                rows.push(Row::with_children(row_elements
+                                    .drain(0..row_elements
+                                        .len()).collect())
+                                    .padding(4)
+                                    .spacing(6).into())
+                            }
+                            Column::with_children(rows).into()
+                        },
+                    ])
                     .width(Length::Fill)
                     .align_items(Align::Start)
+                ).height(Length::Units(110))
+                    .align_x(Align::Start)
+                    .align_y(Align::Center)
                     .into(),
             ])
 
@@ -283,7 +323,7 @@ impl Application for ElevatorApp {
                     .into();
                 let mut row_floors = Vec::with_capacity(Self::floor_rows() as usize);
                 let mut tmp_row = Vec::with_capacity(BTN_PER_ROW as usize);
-                let mut i = 0;
+                let mut i = 1;
                 for f in floors
                     .iter_mut()
                     .enumerate()
@@ -292,17 +332,14 @@ impl Application for ElevatorApp {
                               row.push(floor.floor_view());
                               row
                           }) {
+                    tmp_row.push(f);
                     if i % BTN_PER_ROW == 0 {
-                        if !tmp_row.is_empty() {
-                            row_floors.push(Row::with_children(
-                                tmp_row.drain(0..tmp_row.len()).collect())
-                                .spacing(10)
-                                .padding(4)
-                                .into()
-                            );
-                        }
-                    } else {
-                        tmp_row.push(f);
+                        row_floors.push(Row::with_children(
+                            tmp_row.drain(0..tmp_row.len()).collect())
+                            .spacing(10)
+                            .padding(4)
+                            .into()
+                        );
                     }
                     i += 1;
                 }
