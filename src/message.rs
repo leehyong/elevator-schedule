@@ -1,30 +1,33 @@
+use crate::conf::TFloor;
+
 #[derive(Clone)]
 pub enum Message {
     // 上到某楼层
-    Up(i16),
+    Up(TFloor),
     // 上到某些楼层
-    Ups(Vec<i16>),
+    Ups(Vec<TFloor>),
     // 下到某楼层
-    Down(i16),
+    Down(TFloor),
     // 下到某些楼层
-    Downs(Vec<i16>),
+    Downs(Vec<TFloor>),
     // 哪台电梯正在输入楼层
-    InputtingFloor(u8),
+    InputtingFloor(TFloor),
     // 哪台电梯完成输入楼层
-    InputtedFloor(u8, i16),
+    InputtedFloor(usize, TFloor),
     // 程序停止消息
     Quit,
 }
+
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
-pub enum UiMessage{
+pub enum UiMessage {
     Noop,
-    SliderChange(i16),
-    SliderRelease(i16),
+    SliderChange(TFloor),
+    SliderRelease(TFloor),
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,
     ClickedBtnDown,
-    ClickedBtnFloor(u8,i16)
+    ClickedBtnFloor(usize, TFloor),
 }
 
 impl Default for Message {

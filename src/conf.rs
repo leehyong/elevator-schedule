@@ -1,12 +1,14 @@
 
+pub type TFloor = i32;
+
 // 最大电梯部数
 pub const MAX_ELEVATOR_NUM: usize = 4;
 // 最大电梯楼层
-pub const MAX_FLOOR: i16 = 40;
+pub const MAX_FLOOR: TFloor = 40;
 // 最小电梯楼层数
-pub const MIN_FLOOR: i16 = -4;
+pub const MIN_FLOOR: TFloor = -4;
 // 最大承载人数
-pub const MAX_PERSON_CAPACITY: u8 = 18;
+pub const MAX_PERSON_CAPACITY: usize = 18;
 
 // 上下人等待时间, 单位：豪秒
 pub const SUSPEND_WAIT_IN_MILLISECONDS: u32 = 5 * 100;

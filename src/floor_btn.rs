@@ -2,17 +2,17 @@ use std::fmt::{Display, Formatter};
 use iced::*;
 use iced::button::StyleSheet;
 use crate::icon::*;
-use crate::conf::{MAX_FLOOR, MIN_FLOOR};
+use crate::conf::{MAX_FLOOR, MIN_FLOOR, TFloor};
 use crate::message::UiMessage;
 use crate::style::{ActiveFloorBtnStyle, ActiveFloorTxtStyle};
 
 #[derive(Default)]
 pub struct FloorBtnState {
-    pub floor: i16,
+    pub floor: TFloor,
     // 判定按钮双击
     pub last_pressed: Option<std::time::Instant>,
     pub is_active: bool,
-    pub elevator_no: u8,
+    pub elevator_no: usize,
     pub state: button::State,
 }
 
@@ -57,7 +57,7 @@ impl Display for Direction {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct WaitFloorTxtState {
-    pub floor: i16,
+    pub floor: TFloor,
     pub direction: Direction,
 }
 

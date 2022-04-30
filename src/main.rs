@@ -11,10 +11,11 @@ pub mod app;
 pub mod style;
 pub mod floor_btn;
 pub mod icon;
+pub mod lift;
 
 
 use std::io::{Read, Write};
-use scheduler::Scheduler;
+// use scheduler::Scheduler;
 
 fn main() {
    // let mut schedule = Scheduler::new();

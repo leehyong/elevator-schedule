@@ -7,15 +7,16 @@ use crate::message::*;
 use iced::*;
 use iced::futures::SinkExt;
 use rand::{Rng, thread_rng};
-use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
+use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR, TFloor};
+// use crate::elevator::Elevator;
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 use crate::icon::*;
-use crate::up_down_elevator_floor::FloorType::Person;
+use crate::lift::Lift;
 
 
 struct ElevatorApp {
-    floor: i16,
-    tmp_floor: i16,
+    floor: TFloor,
+    tmp_floor: TFloor,
     slider_state: slider::State,
     up_btn_state: button::State,
     plus_btn_state: button::State,
@@ -25,6 +26,7 @@ struct ElevatorApp {
     elevator_btns: Vec<Vec<FloorBtnState>>,
     // 哪些楼层需要安排电梯去接人的
     wait_floors: LinkedList<WaitFloorTxtState>,
+    elevators:Vec<Lift>
 }
 
 impl Default for ElevatorApp {
@@ -38,7 +40,7 @@ impl Default for ElevatorApp {
                     .map(|o|
                         {
                             let mut btn_state = FloorBtnState::default();
-                            btn_state.elevator_no = no as u8;
+                            btn_state.elevator_no = no;
                             btn_state.floor = o;
                             btn_state
                         }).collect());
@@ -53,6 +55,7 @@ impl Default for ElevatorApp {
             down_btn_state: Default::default(),
             elevator_btns: hp,
             wait_floors: Default::default(),
+            elevators: Vec::with_capacity(MAX_ELEVATOR_NUM),
         }
     }
 }
@@ -67,17 +70,17 @@ pub fn run_window() {
     ElevatorApp::run(settings).unwrap();
 }
 
-const BTN_PER_ROW: i16 = 15;
-const WAIT_FLOOR_PER_ROW: i16 = 16;
-const MAX_WAIT_FLOOR_ROW_NUM: i16 = 4;
+const BTN_PER_ROW: TFloor = 15;
+const WAIT_FLOOR_PER_ROW: TFloor = 16;
+const MAX_WAIT_FLOOR_ROW_NUM: TFloor = 4;
 const MAX_WAIT_FLOOR_NUM: usize = (BTN_PER_ROW * MAX_WAIT_FLOOR_ROW_NUM) as usize;
 
 impl ElevatorApp {
-    const fn floor_rows() -> i16 {
+    const fn floor_rows() -> i32 {
         Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
     }
 
-    const fn calc_rows2(total: i16, per: i16) -> i16 {
+    const fn calc_rows2(total: i32, per: i32) -> i32 {
         let rows = total / per;
         let m = total % per;
         if m == 0 {
@@ -86,7 +89,7 @@ impl ElevatorApp {
             rows + 1
         }
     }
-    fn gen_random_floor() -> i16 {
+    fn gen_random_floor() -> TFloor {
         let mut rng = thread_rng();
         rng.gen_range(1..=MAX_FLOOR)
     }
@@ -108,8 +111,10 @@ impl ElevatorApp {
             floor: self.floor,
             direction,
         };
-        if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() && !self.wait_floors.contains(&fi) {
-            self.wait_floors.push_back(fi);
+        if MAX_WAIT_FLOOR_NUM > self.wait_floors.len(){
+            if !self.wait_floors.contains(&fi) {
+                self.wait_floors.push_back(fi);
+            }
         } else {
             println!("电梯繁忙，请稍后再试,{}", self.floor);
         }
