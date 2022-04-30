@@ -1,23 +1,26 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::{BTreeMap, HashMap};
+use std::cmp::{max, min};
+use std::collections::{BTreeMap, HashMap, LinkedList};
 use std::time::Instant;
 use crate::message::*;
 use iced::*;
 use iced::futures::SinkExt;
 use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
-use crate::floor_btn::FloorBtnState;
+use crate::floor_btn::{FloorBtnState, WaitFloorBtnState};
 
 
 struct ElevatorApp {
     floor: i16,
+    tmp_floor: i16,
     slider_state: slider::State,
     up_btn_state: button::State,
     plus_btn_state: button::State,
     subtract_btn_state: button::State,
     down_btn_state: button::State,
     elevator_btns: BTreeMap<usize, Vec<FloorBtnState>>,
+    wait_floors: LinkedList<WaitFloorBtnState>,
 }
 
 impl Default for ElevatorApp {
@@ -37,12 +40,14 @@ impl Default for ElevatorApp {
         }
         Self {
             floor: 1,
+            tmp_floor: 0,
             slider_state: Default::default(),
             up_btn_state: Default::default(),
             plus_btn_state: Default::default(),
             subtract_btn_state: Default::default(),
             down_btn_state: Default::default(),
             elevator_btns: hp,
+            wait_floors: Default::default()
         }
     }
 }
@@ -79,6 +84,7 @@ impl ElevatorApp {
             let f = Self::gen_random_floor();
             if f != self.floor {
                 self.floor = f;
+                self.tmp_floor = f;
                 // 直到生产一个不同的楼层才终止循环。
                 break;
             }
@@ -103,6 +109,12 @@ impl Application for ElevatorApp {
         match message {
             UiMessage::SliderChange(floor) => {
                 if floor != 0 {
+                    self.tmp_floor = floor;
+                }
+                println!("{:?}", message);
+            }
+            UiMessage::SliderRelease(floor) => {
+                if floor != 0 {
                     self.floor = floor;
                 }
             }
@@ -112,6 +124,8 @@ impl Application for ElevatorApp {
                 } else {
                     self.floor += 1
                 }
+                self.floor = min(self.floor, MAX_FLOOR);
+                self.tmp_floor = self.floor
             }
             UiMessage::ClickedBtnSubtract => {
                 if self.floor == 1 {
@@ -119,6 +133,8 @@ impl Application for ElevatorApp {
                 } else {
                     self.floor -= 1
                 }
+                self.floor = max(self.floor, MIN_FLOOR);
+                self.tmp_floor = self.floor
             }
             UiMessage::ClickedBtnUp => {
                 println!("{:?}", message);
@@ -159,8 +175,9 @@ impl Application for ElevatorApp {
         let slider = Slider::new(
             &mut self.slider_state,
             (MIN_FLOOR..=MAX_FLOOR),
-            self.floor,
+            self.tmp_floor,
             UiMessage::SliderChange)
+            .on_release(UiMessage::SliderRelease(self.tmp_floor))
             .width(Length::FillPortion(2))
             .into();
         let floor = Text::new(&format!("{}", self.floor))

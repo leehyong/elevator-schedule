@@ -30,3 +30,21 @@ impl FloorBtnState {
         btn.into()
     }
 }
+
+#[derive(Default)]
+pub struct WaitFloorBtnState {
+    pub floor: i16,
+    pub state: button::State,
+}
+
+impl WaitFloorBtnState {
+    pub fn floor_view(&mut self) -> Element<UiMessage> {
+        Button::new(
+            &mut self.state,
+            Text::new(format!("{}", self.floor))
+                .horizontal_alignment(HorizontalAlignment::Center),
+        ).style(ActiveFloorBtnStyle::default())
+            .width(Length::Units(30))
+            .into()
+    }
+}

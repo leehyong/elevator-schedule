@@ -19,6 +19,7 @@ pub enum Message {
 pub enum UiMessage{
     Noop,
     SliderChange(i16),
+    SliderRelease(i16),
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,
