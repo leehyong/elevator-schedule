@@ -8,7 +8,7 @@ use iced::*;
 use iced::futures::SinkExt;
 use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR};
-use crate::floor_btn::{FloorBtnState, WaitFloorBtnState};
+use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 
 
 struct ElevatorApp {
@@ -20,7 +20,7 @@ struct ElevatorApp {
     subtract_btn_state: button::State,
     down_btn_state: button::State,
     elevator_btns: BTreeMap<usize, Vec<FloorBtnState>>,
-    wait_floors: LinkedList<WaitFloorBtnState>,
+    wait_floors: LinkedList<WaitFloorTxtState>,
 }
 
 impl Default for ElevatorApp {
@@ -47,7 +47,7 @@ impl Default for ElevatorApp {
             subtract_btn_state: Default::default(),
             down_btn_state: Default::default(),
             elevator_btns: hp,
-            wait_floors: Default::default()
+            wait_floors: Default::default(),
         }
     }
 }
@@ -90,6 +90,16 @@ impl ElevatorApp {
             }
         }
     }
+
+    fn add_to_wait_floor(&mut self, direction: Direction) {
+        let fi = WaitFloorTxtState {
+            floor: self.floor,
+            direction,
+        };
+        if !self.wait_floors.contains(&fi) {
+            self.wait_floors.push_back(fi);
+        }
+    }
 }
 
 impl Application for ElevatorApp {
@@ -105,13 +115,13 @@ impl Application for ElevatorApp {
         format!("多路电梯调度器")
     }
 
+
     fn update(&mut self, message: Self::Message, clipboard: &mut Clipboard) -> Command<Self::Message> {
         match message {
             UiMessage::SliderChange(floor) => {
                 if floor != 0 {
                     self.tmp_floor = floor;
                 }
-                println!("{:?}", message);
             }
             UiMessage::SliderRelease(floor) => {
                 if floor != 0 {
@@ -125,7 +135,7 @@ impl Application for ElevatorApp {
                     self.floor += 1
                 }
                 self.floor = min(self.floor, MAX_FLOOR);
-                self.tmp_floor = self.floor
+                self.tmp_floor = self.floor;
             }
             UiMessage::ClickedBtnSubtract => {
                 if self.floor == 1 {
@@ -134,14 +144,14 @@ impl Application for ElevatorApp {
                     self.floor -= 1
                 }
                 self.floor = max(self.floor, MIN_FLOOR);
-                self.tmp_floor = self.floor
+                self.tmp_floor = self.floor;
             }
             UiMessage::ClickedBtnUp => {
-                println!("{:?}", message);
+                self.add_to_wait_floor(Direction::Up);
                 self.set_random_floor();
             }
             UiMessage::ClickedBtnDown => {
-                println!("{:?}", message);
+                self.add_to_wait_floor(Direction::Down);
                 self.set_random_floor();
             }
             UiMessage::ClickedBtnFloor(no, floor) => {
@@ -151,15 +161,15 @@ impl Application for ElevatorApp {
                     .iter_mut()
                     .find(|o| o.floor == floor)
                     .unwrap();
-                if let Some(inst) = btn.last_pressed{
+                if let Some(inst) = btn.last_pressed {
                     // 在200毫秒内连续点击了多次，就认为是双击了
                     if inst.elapsed().as_micros() < 1000_000 {
                         btn.is_active = false;
-                    }else{
+                    } else {
                         btn.is_active = true;
                     }
                     btn.last_pressed = None
-                } else{
+                } else {
                     btn.is_active = true;
                     btn.last_pressed = Some(Instant::now());
                 }
@@ -218,10 +228,32 @@ impl Application for ElevatorApp {
         subs.push(up_btn_row);
         subs.push(Space::with_width(Length::FillPortion(2)).into());
         let mut rows = vec![
-            Row::with_children(subs)
-                .padding(20)
+            Column::with_children(vec![
+                Row::with_children(subs)
+                    .padding(20)
+                    .width(Length::Fill)
+                    .align_items(Align::Center).into(),
+                Row::with_children(vec![
+                    Text::new("等待的楼层:").into(),
+                    self.
+                        wait_floors
+                        .iter_mut()
+                        .fold(Row::new(), |row, txt| {
+                            row.push(txt.floor_view())
+                        })
+                        .spacing(6)
+                        .into(),
+                ])
+                    .padding(20)
+                    .spacing(10)
+                    .width(Length::Fill)
+                    .align_items(Align::Start)
+                    .into(),
+            ])
+
                 .width(Length::Fill)
-                .align_items(Align::Center).into(),
+                .spacing(4)
+                .into(),
         ];
         let new_rows = self.elevator_btns
             .iter_mut()
