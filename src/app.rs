@@ -2,16 +2,18 @@
 
 use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap, LinkedList};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use crate::message::*;
 use iced::*;
 use iced::futures::SinkExt;
+use iced::window::Mode;
 use rand::{Rng, thread_rng};
 use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR, TFloor};
-// use crate::elevator::Elevator;
+use crate::util::*;
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 use crate::icon::*;
 use crate::lift::Lift;
+use crate::state::State;
 
 
 struct ElevatorApp {
@@ -26,12 +28,13 @@ struct ElevatorApp {
     elevator_btns: Vec<Vec<FloorBtnState>>,
     // 哪些楼层需要安排电梯去接人的
     wait_floors: LinkedList<WaitFloorTxtState>,
-    elevators:Vec<Lift>
+    lifts: Vec<Lift>,
 }
 
 impl Default for ElevatorApp {
     fn default() -> Self {
         let mut hp = Vec::with_capacity(MAX_ELEVATOR_NUM as usize);
+        let mut lifts = Vec::with_capacity(MAX_ELEVATOR_NUM);
         for no in 0..MAX_ELEVATOR_NUM {
             hp.push(
                 (MIN_FLOOR..=MAX_FLOOR)
@@ -44,6 +47,7 @@ impl Default for ElevatorApp {
                             btn_state.floor = o;
                             btn_state
                         }).collect());
+            lifts.push(Lift::new(no));
         }
         Self {
             floor: 1,
@@ -55,13 +59,12 @@ impl Default for ElevatorApp {
             down_btn_state: Default::default(),
             elevator_btns: hp,
             wait_floors: Default::default(),
-            elevators: Vec::with_capacity(MAX_ELEVATOR_NUM),
+            lifts,
         }
     }
 }
 
 pub fn run_window() {
-    // let mut settings = Settings::with_flags(AppFlags::new(exe_path));
     let mut settings = Settings::default();
     settings.window.resizable = true; // 不能重新缩放窗口
     settings.default_font = Some(include_bytes!(
@@ -80,6 +83,42 @@ impl ElevatorApp {
         Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
     }
 
+    fn schedule_running_lift(&mut self, direction:Direction, floors:&[TFloor]) -> Command<Message>{
+        let mut selected_stop_lift_no = None;
+        let min_cost = i32::MAX_VALUE;
+        self.lifts
+            .iter_mut()
+            .filter(|o|
+                match direction {
+                    Direction::Up => {o.state == State::GoingUp || o.state == State::GoingUpSuspend }
+                    Direction::Down => {o.state == State::GoingDown || o.state == State::GoingDownSuspend }
+                }).for_each(|lift|{
+
+        });
+        Command::none()
+    }
+    fn schedule_stopped_lift(&mut self, direction:Direction, floors:&[TFloor]) -> Command<Message>{
+        Command::none()
+    }
+
+    fn schedule(&mut self) -> Command<UiMessage> {
+        for direction in [Direction::Up, Direction::Down] {
+            let floors = self.wait_floors
+                .iter()
+                .filter(|o| o.direction == direction)
+                .map(|o| o.floor)
+                .collect::<Vec<_>>();
+            // 1、优先从运行的的电梯中，去选择合适的电梯去处理
+            self.schedule_running_lift(direction, &floors);
+            // 2、或者从停止的电梯中，去选择合适的电梯去处理
+            self.schedule_stopped_lift(direction, &floors);
+            //
+        }
+
+        Command::none()
+    }
+
+
     const fn calc_rows2(total: i32, per: i32) -> i32 {
         let rows = total / per;
         let m = total % per;
@@ -89,14 +128,10 @@ impl ElevatorApp {
             rows + 1
         }
     }
-    fn gen_random_floor() -> TFloor {
-        let mut rng = thread_rng();
-        rng.gen_range(1..=MAX_FLOOR)
-    }
 
     fn set_random_floor(&mut self) {
         loop {
-            let f = Self::gen_random_floor();
+            let f = random_floor();
             if f != self.floor {
                 self.floor = f;
                 self.tmp_floor = f;
@@ -111,7 +146,7 @@ impl ElevatorApp {
             floor: self.floor,
             direction,
         };
-        if MAX_WAIT_FLOOR_NUM > self.wait_floors.len(){
+        if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() {
             if !self.wait_floors.contains(&fi) {
                 self.wait_floors.push_back(fi);
             }
@@ -173,6 +208,11 @@ impl Application for ElevatorApp {
                 self.add_to_wait_floor(Direction::Down);
                 self.set_random_floor();
             }
+            UiMessage::Schedule => {
+                // todo
+                println!("电梯调度");
+                self.schedule()
+            }
             UiMessage::ClickedBtnFloor(no, floor) => {
                 let btn = self.elevator_btns[no as usize]
                     .iter_mut()
@@ -198,6 +238,18 @@ impl Application for ElevatorApp {
         Command::none()
     }
 
+    fn subscription(&self) -> Subscription<Self::Message> {
+        // 每隔3秒检查一次是否有用户要乘电梯，有的话，就要去调度
+        let is_empty = self.wait_floors.is_empty();
+        let mut subs = vec![];
+        if is_empty {
+            subs.push(
+                time::every(Duration::from_secs(3))
+                    .map(|_| UiMessage::Schedule)
+            )
+        }
+        Subscription::batch(subs)
+    }
     fn view(&mut self) -> Element<'_, Self::Message> {
         let mut subs = vec![];
         let slider = Slider::new(
@@ -275,8 +327,8 @@ impl Application for ElevatorApp {
                                 row_elements.push(f);
                                 if i % WAIT_FLOOR_PER_ROW == 0 {
                                     rows.push(Row::with_children(row_elements
-                                        .drain(0..row_elements
-                                            .len()).collect())
+                                        .drain(..)
+                                        .collect())
                                         .padding(4)
                                         .spacing(6)
                                         .into())
@@ -285,8 +337,8 @@ impl Application for ElevatorApp {
                             }
                             if !row_elements.is_empty() {
                                 rows.push(Row::with_children(row_elements
-                                    .drain(0..row_elements
-                                        .len()).collect())
+                                    .drain(..)
+                                    .collect())
                                     .padding(4)
                                     .spacing(6).into())
                             }
@@ -342,7 +394,9 @@ impl Application for ElevatorApp {
                     tmp_row.push(f);
                     if i % BTN_PER_ROW == 0 {
                         row_floors.push(Row::with_children(
-                            tmp_row.drain(0..tmp_row.len()).collect())
+                            tmp_row
+                                .drain(..)
+                                .collect())
                             .spacing(10)
                             .padding(4)
                             .into()
@@ -352,7 +406,9 @@ impl Application for ElevatorApp {
                 }
                 if !tmp_row.is_empty() {
                     row_floors.push(Row::with_children(
-                        tmp_row.drain(0..tmp_row.len()).collect())
+                        tmp_row
+                            .drain(..)
+                            .collect())
                         .spacing(10)
                         .padding(4)
                         .into()

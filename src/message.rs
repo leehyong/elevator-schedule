@@ -21,6 +21,7 @@ pub enum Message {
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
 pub enum UiMessage {
     Noop,
+    Schedule,
     SliderChange(TFloor),
     SliderRelease(TFloor),
     ClickedBtnPlus,
