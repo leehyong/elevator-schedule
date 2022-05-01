@@ -1,6 +1,7 @@
-use std::collections::LinkedList;
+use std::collections::{BTreeSet, LinkedList};
 use std::fmt::{Display, Formatter};
 use crate::conf::TFloor;
+use crate::floor_btn::Direction;
 use crate::state::State;
 
 // 电梯
@@ -15,11 +16,11 @@ pub struct Lift {
     // 电梯当前停靠楼层
     pub cur_floor: TFloor,
     // 用户输入的停靠楼层
-    pub stop_floors: LinkedList<TFloor>,
+    pub stop_floors: BTreeSet<TFloor>,
     // 调度器调度的停靠楼层
     // 上行时，schedule_floors 的元素值 > cur_floor
     // 下行时，schedule_floors 的元素值 < cur_floor
-    pub schedule_floors: LinkedList<TFloor>,
+    pub schedule_floors: BTreeSet<TFloor>,
 }
 
 
@@ -44,4 +45,10 @@ impl Display for Lift {
     }
 }
 
-pub fn schedule() {}
+
+pub struct LiftUpDownCost {
+    pub no: usize,
+    pub cost: i32,
+    pub cnt: usize,
+    pub direction: Direction,
+}

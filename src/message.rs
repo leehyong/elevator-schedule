@@ -19,9 +19,10 @@ pub enum Message {
 }
 
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
-pub enum UiMessage {
+pub enum AppMessage {
     Noop,
-    Schedule,
+    Scheduling, // 调度中
+    Scheduled,  // 调度完成
     SliderChange(TFloor),
     SliderRelease(TFloor),
     ClickedBtnPlus,

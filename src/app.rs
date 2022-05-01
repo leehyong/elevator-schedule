@@ -12,7 +12,8 @@ use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR, TFloor};
 use crate::util::*;
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 use crate::icon::*;
-use crate::lift::Lift;
+use crate::lift::{Lift, LiftUpDownCost};
+use crate::up_down_elevator_floor::*;
 use crate::state::State;
 
 
@@ -78,44 +79,178 @@ const WAIT_FLOOR_PER_ROW: TFloor = 16;
 const MAX_WAIT_FLOOR_ROW_NUM: TFloor = 4;
 const MAX_WAIT_FLOOR_NUM: usize = (BTN_PER_ROW * MAX_WAIT_FLOOR_ROW_NUM) as usize;
 
+
 impl ElevatorApp {
     const fn floor_rows() -> i32 {
         Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
     }
 
-    fn schedule_running_lift(&mut self, direction:Direction, floors:&[TFloor]) -> Command<Message>{
-        let mut selected_stop_lift_no = None;
-        let min_cost = i32::MAX_VALUE;
+    fn handle_up_floors(&self, floors: &[TFloor]) -> Vec<LiftUpDownCost> {
+        // todo , 怎么规划，才能做到最小代价？
         self.lifts
-            .iter_mut()
-            .filter(|o|
-                match direction {
-                    Direction::Up => {o.state == State::GoingUp || o.state == State::GoingUpSuspend }
-                    Direction::Down => {o.state == State::GoingDown || o.state == State::GoingDownSuspend }
-                }).for_each(|lift|{
-
-        });
-        Command::none()
+            .iter()
+            .filter(
+                move |o| o.state == State::Stop
+            )
+            .map(
+                |lift| {
+                    // 每个静止的电梯都要考虑， 上下两个方向的成本
+                    let mut cnt = 0;
+                    let cost = floors.iter()
+                        .filter(|floor| **floor >= lift.cur_floor)
+                        .map(|floor| {
+                            cnt += 1;
+                            (floor - lift.cur_floor)
+                        }).sum();
+                    LiftUpDownCost {
+                        no,
+                        direction:Direction::Up,
+                        cost,
+                        cnt,
+                    }
+                }).collect()
     }
-    fn schedule_stopped_lift(&mut self, direction:Direction, floors:&[TFloor]) -> Command<Message>{
-        Command::none()
+    fn handle_down_floors(&self, floors: &[TFloor]) -> Vec<LiftUpDownCost> {
+        self.lifts
+            .iter()
+            .filter(
+                move |o| o.state == State::Stop
+            )
+            .map(
+                lift | {
+                    // 每个静止的电梯都要考虑， 上下两个方向的成本
+                    let mut cnt = 0;
+                    let cost = floors.iter()
+                        .filter(|floor| **floor <= lift.cur_floor)
+                        .map(|floor| {
+                            cnt += 1;
+                            lift.cur_floor - floor
+                        }).sum();
+                    LiftUpDownCost {
+                        no,
+                        direction:Direction::Down,
+                        cost,
+                        cnt,
+                    }
+                }).collect()
     }
 
-    fn schedule(&mut self) -> Command<UiMessage> {
+
+    fn schedule_stopped_lift(&mut self, up_floors: &[TFloor], down_floors: &[TFloor]) {
+        // 上行代价和下行代价相同是，尽量去接 楼层数更多的
+        // 最小的上行代价
+        let up = self.handle_up_floors(up_floors);
+        let down = self.handle_down_floors(down_floors);
+        // match up.no {
+        //     Some(up) => {
+        //         match down.no {
+        //             Some(down) => {
+        //                 let up_lift = &mut self.lifts[up];
+        //                 floors
+        //                     .iter()
+        //                     .filter(|o| **o >= up_lift.cur_floor)
+        //                     .for_each(|v| {
+        //                         lift.schedule_floors.insert(*v);
+        //                     });
+        //                 if up != down {
+        //                     let down_lift = &mut self.lifts[down];
+        //                     floors
+        //                         .iter()
+        //                         .filter(|o| **o <= down_lift.cur_floor)
+        //                         .for_each(|v| {
+        //                             lift.schedule_floors.insert(*v);
+        //                         });
+        //                 }
+        //             }
+        //             None => {}
+        //         }
+        //     }
+        //     None => {}
+        // }
+    }
+
+    fn schedule_running_lift(&mut self) {
         for direction in [Direction::Up, Direction::Down] {
-            let floors = self.wait_floors
+            let mut one_direction_floors = self.wait_floors
                 .iter()
                 .filter(|o| o.direction == direction)
-                .map(|o| o.floor)
+                .map(|o| {
+                    UpDownElevatorFloor { floor: o.floor, typ: FloorType::Person }
+                })
                 .collect::<Vec<_>>();
-            // 1、优先从运行的的电梯中，去选择合适的电梯去处理
-            self.schedule_running_lift(direction, &floors);
-            // 2、或者从停止的电梯中，去选择合适的电梯去处理
-            self.schedule_stopped_lift(direction, &floors);
-            //
+            self.lifts
+                .iter_mut()
+                .filter(
+                    move |o|
+                        match direction {
+                            Direction::Up => { o.state == State::GoingUp || o.state == State::GoingUpSuspend }
+                            Direction::Down => { o.state == State::GoingDown || o.state == State::GoingDownSuspend }
+                        })
+                .for_each(
+                    |lift| {
+                        one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
+                    });
+            // 通过排序， 确定每个电梯应该响应哪些楼层
+            match direction {
+                // 上升， 升序
+                Direction::Up => one_direction_floors.sort(),
+                // 下降， 降序
+                Direction::Down => one_direction_floors.sort_by(|a, b| b.cmp(a))
+            }
+            let mut elevator = None;
+            for item in one_direction_floors {
+                match item.typ {
+                    FloorType::Elevator(idx) => {
+                        elevator = Some(&mut self.lifts[idx])
+                    }
+                    FloorType::Person => {
+                        if let Some(ele) = elevator {
+                            ele.schedule_floors.insert(item.floor);
+                        }
+                    }
+                }
+            }
         }
+    }
 
-        Command::none()
+    fn schedule(&mut self) -> Command<AppMessage> {
+        // 1、优先从运行的的电梯中，去选择合适的电梯去处理
+        self.schedule_running_lift();
+        // 2、或者从停止的电梯中，去选择合适的电梯去处理
+        let f = self.wait_floors
+            .iter()
+            .filter(|o| {
+                for lift in self.lifts.iter().filter(|o| o.state == State::Stop) {
+                    // 方向一直性检查
+                    if lift.schedule_floors.contains(&o.floor) {
+                        match lift.state {
+                            State::GoingUp | State::GoingUpSuspend => {
+                                if o.direction == Direction::Up {
+                                    // 不需要被选中
+                                    return false;
+                                }
+                            }
+                            State::GoingDown | State::GoingDownSuspend => {
+                                if o.direction == Direction::Down {
+                                    // 不需要被选中
+                                    return false;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                // 所有电梯都没有调度到该楼层
+                true
+            });
+        let remain_up_floors = f.filter(|o| o.direction == Direction::Up)
+            .map(|o| o.floor)
+            .collect::<Vec<_>>();
+        let remain_down_floors = f.filter(|o| o.direction == Direction::Down)
+            .map(|o| o.floor)
+            .collect::<Vec<_>>();
+        self.schedule_stopped_lift(&remain_up_floors, &remain_down_floors);
+        Command::perform(async {}, AppMessage::Scheduled)
     }
 
 
@@ -158,7 +293,7 @@ impl ElevatorApp {
 
 impl Application for ElevatorApp {
     type Executor = executor::Default;
-    type Message = UiMessage;
+    type Message = AppMessage;
     type Flags = ();
 
     fn new(_: Self::Flags) -> (Self, Command<Self::Message>) {
@@ -172,17 +307,17 @@ impl Application for ElevatorApp {
 
     fn update(&mut self, message: Self::Message, clipboard: &mut Clipboard) -> Command<Self::Message> {
         match message {
-            UiMessage::SliderChange(floor) => {
+            AppMessage::SliderChange(floor) => {
                 if floor != 0 {
                     self.tmp_floor = floor;
                 }
             }
-            UiMessage::SliderRelease(floor) => {
+            AppMessage::SliderRelease(floor) => {
                 if floor != 0 {
                     self.floor = floor;
                 }
             }
-            UiMessage::ClickedBtnPlus => {
+            AppMessage::ClickedBtnPlus => {
                 if self.floor == -1 {
                     self.floor = 1
                 } else {
@@ -191,7 +326,7 @@ impl Application for ElevatorApp {
                 self.floor = min(self.floor, MAX_FLOOR);
                 self.tmp_floor = self.floor;
             }
-            UiMessage::ClickedBtnSubtract => {
+            AppMessage::ClickedBtnSubtract => {
                 if self.floor == 1 {
                     self.floor = -1
                 } else {
@@ -200,20 +335,25 @@ impl Application for ElevatorApp {
                 self.floor = max(self.floor, MIN_FLOOR);
                 self.tmp_floor = self.floor;
             }
-            UiMessage::ClickedBtnUp => {
+            AppMessage::ClickedBtnUp => {
                 self.add_to_wait_floor(Direction::Up);
                 self.set_random_floor();
             }
-            UiMessage::ClickedBtnDown => {
+            AppMessage::ClickedBtnDown => {
                 self.add_to_wait_floor(Direction::Down);
                 self.set_random_floor();
             }
-            UiMessage::Schedule => {
+            AppMessage::Scheduling => {
                 // todo
                 println!("电梯调度");
                 self.schedule()
             }
-            UiMessage::ClickedBtnFloor(no, floor) => {
+            AppMessage::Scheduled => {
+                // todo
+                println!("电梯调度完成了");
+            }
+
+            AppMessage::ClickedBtnFloor(no, floor) => {
                 let btn = self.elevator_btns[no as usize]
                     .iter_mut()
                     .find(|o| o.floor == floor)
@@ -240,15 +380,10 @@ impl Application for ElevatorApp {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         // 每隔3秒检查一次是否有用户要乘电梯，有的话，就要去调度
-        let is_empty = self.wait_floors.is_empty();
-        let mut subs = vec![];
-        if is_empty {
-            subs.push(
-                time::every(Duration::from_secs(3))
-                    .map(|_| UiMessage::Schedule)
-            )
-        }
-        Subscription::batch(subs)
+        Subscription::batch(vec![
+            time::every(Duration::from_secs(3))
+                .map(|_| AppMessage::Scheduling),
+        ])
     }
     fn view(&mut self) -> Element<'_, Self::Message> {
         let mut subs = vec![];
@@ -256,8 +391,8 @@ impl Application for ElevatorApp {
             &mut self.slider_state,
             (MIN_FLOOR..=MAX_FLOOR),
             self.tmp_floor,
-            UiMessage::SliderChange)
-            .on_release(UiMessage::SliderRelease(self.tmp_floor))
+            AppMessage::SliderChange)
+            .on_release(AppMessage::SliderRelease(self.tmp_floor))
             .width(Length::FillPortion(2))
             .into();
         let floor = Text::new(&format!("{}", self.floor))
@@ -269,13 +404,13 @@ impl Application for ElevatorApp {
         let up_btn_row = Row::with_children(vec![
             Button::new(&mut self.up_btn_state, up_icon()
                 .color(Color::from_rgb8(255, 0, 0)))
-                .on_press(UiMessage::ClickedBtnUp)
+                .on_press(AppMessage::ClickedBtnUp)
                 .width(Length::Units(30))
                 .into(),
             Space::with_width(Length::Units(10)).into(),
             Button::new(&mut self.down_btn_state, down_icon()
                 .color(Color::from_rgb8(0, 0, 255)))
-                .on_press(UiMessage::ClickedBtnDown)
+                .on_press(AppMessage::ClickedBtnDown)
                 .width(Length::Units(30))
                 .into(),
         ]).width(Length::FillPortion(1))
@@ -283,14 +418,14 @@ impl Application for ElevatorApp {
 
         subs.push(Button::new(&mut self.subtract_btn_state, subtract_icon())
                       .width(Length::Units(20))
-                      .on_press(UiMessage::ClickedBtnSubtract)
+                      .on_press(AppMessage::ClickedBtnSubtract)
                       .into(), );
         subs.push(Space::with_width(Length::Units(5)).into());
         subs.push(slider);
         subs.push(Space::with_width(Length::Units(5)).into());
         subs.push(Button::new(&mut self.plus_btn_state, plus_icon())
                       .width(Length::Units(20))
-                      .on_press(UiMessage::ClickedBtnPlus)
+                      .on_press(AppMessage::ClickedBtnPlus)
                       .into(), );
         subs.push(Space::with_width(Length::Units(20)).into());
         subs.push(e);

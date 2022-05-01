@@ -1,10 +1,11 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use crate::conf::TFloor;
 
 #[derive(PartialOrd, PartialEq, Debug)]
 pub enum FloorType {
     Person,
-    Elevator(u8),
+    Elevator(usize),
 }
 
 impl Default for FloorType {
@@ -15,7 +16,7 @@ impl Default for FloorType {
 
 #[derive(Debug)]
 pub struct UpDownElevatorFloor {
-    pub floor: i16,
+    pub floor: TFloor,
     pub typ: FloorType,
 }
 

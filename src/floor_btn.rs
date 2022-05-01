@@ -3,7 +3,7 @@ use iced::*;
 use iced::button::StyleSheet;
 use crate::icon::*;
 use crate::conf::{MAX_FLOOR, MIN_FLOOR, TFloor};
-use crate::message::UiMessage;
+use crate::message::AppMessage;
 use crate::style::{ActiveFloorBtnStyle, ActiveFloorTxtStyle};
 
 #[derive(Default)]
@@ -18,14 +18,14 @@ pub struct FloorBtnState {
 
 
 impl FloorBtnState {
-    pub fn floor_view(&mut self) -> Element<UiMessage> {
+    pub fn floor_view(&mut self) -> Element<AppMessage> {
         let mut btn = Button::new(&mut self.state,
                                   Text::new(format!("{}", self.floor))
                                       .horizontal_alignment(HorizontalAlignment::Center),
         )
             .width(Length::Units(30))
             .on_press(
-                UiMessage::ClickedBtnFloor(self.elevator_no, self.floor)
+                AppMessage::ClickedBtnFloor(self.elevator_no, self.floor)
             );
         if self.last_pressed.is_some() && self.is_active {
             btn = btn.style(ActiveFloorBtnStyle::default());
@@ -62,7 +62,7 @@ pub struct WaitFloorTxtState {
 }
 
 impl WaitFloorTxtState {
-    pub fn floor_view(&mut self) -> Element<UiMessage> {
+    pub fn floor_view(&mut self) -> Element<AppMessage> {
         Container::new(
             Row::with_children(vec![
                 Text::new(format!("{}", self.floor))
