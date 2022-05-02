@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 // 电梯状态
-#[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum State {
     // 电梯静止不动
     Stop,

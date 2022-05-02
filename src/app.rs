@@ -348,7 +348,7 @@ impl Application for ElevatorApp {
     }
 
     fn update(&mut self, message: Self::Message, clipboard: &mut Clipboard) -> Command<Self::Message> {
-        println!("{:?}", message);
+        // println!("{:?}", message);
         match message {
             AppMessage::SliderChange(floor) => {
                 if floor != 0 {
@@ -421,6 +421,7 @@ impl Application for ElevatorApp {
                 println!("电梯#{},已达到楼层{},正在等人进出。", no, floor);
                 return Command::perform(async move {}, move |_| AppMessage::LiftRunningByOne(no));
             }
+
             AppMessage::ScheduleWaitUserInputFloor(no, floor) => {
                 let lift = &mut self.lifts[no];
                 lift.can_click_btn = true;
@@ -438,31 +439,31 @@ impl Application for ElevatorApp {
                 }
                 println!("电梯#{}-{}层,{}", no, floor, lift.state.to_string());
             }
-
+            AppMessage::LiftRunning => {
+                return Command::batch(
+                    (0..MAX_ELEVATOR_NUM)
+                        .into_iter()
+                        .map(|no|{
+                            Command::perform(async move{
+                                no
+                            }, |no| AppMessage::LiftRunningByOne(no))
+                        })
+                );
+            }
             AppMessage::LiftRunningByOne(no) => {
-                let mut cmds = vec![];
                 let lift = &self.lifts[no];
                 let no = lift.no;
                 let cur_floor = lift.cur_floor;
-                for floor in lift.stop_floors.union(&lift.schedule_floors) {
+                if let Some(floor) = lift.stop_floors.union(&lift.schedule_floors).into_iter().next() {
                     let floor = *floor;
-                    cmds.push(Command::perform(async move {
+                    return Command::perform(async move {
                         Lift::running_suspend_one_by_one_floor(no, cur_floor, floor).await
-                    }, |msg| msg))
+                    }, |msg| msg);
+                    // if cmds.len() > 0 {
+                    //     println!("LiftRunningByOne:电梯#{},{}个", no + 1, cmds.len());
+                    // }
                 }
-                if cmds.len() > 0 {
-                    println!("LiftRunningByOne:电梯#{},{}个", no + 1, cmds.len());
-                }
-                return Command::batch(cmds);
-            }
-
-            AppMessage::LiftRunning => {
-                let mut cmds = vec![];
-                for lift in self.lifts.iter() {
-                    let no = lift.no;
-                    cmds.push(Command::perform(async move {}, move |_| AppMessage::LiftRunningByOne(no)))
-                }
-                return Command::batch(cmds);
+                return Command::none();
             }
 
             AppMessage::RunningArrive(no, floor) => {
@@ -470,7 +471,19 @@ impl Application for ElevatorApp {
                 lift.cur_floor = floor;
                 // 从调度队列、用户输入队列中删除到达的楼层 floor
                 lift.schedule_floors.remove(&floor);
+                let state = lift.state.clone();
                 lift.stop_floors.remove(&floor);
+                if let Some((idx, _)) = self.wait_floors.iter().enumerate().find(|(_, wf)| wf.floor == floor && {
+                    match state {
+                        State::GoingUp | State::GoingUpSuspend => wf.direction == Direction::Up,
+                        State::GoingDown | State::GoingDownSuspend => wf.direction == Direction::Down,
+                        _ => false
+                    }
+                }) {
+                    let mut after = self.wait_floors.split_off(idx);
+                    after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
+                    self.wait_floors.append(&mut after);
+                }
                 lift.state = match lift.state {
                     State::GoingUp => {
                         if lift.stop_floors.is_empty() && lift.schedule_floors.is_empty() {
@@ -704,7 +717,7 @@ impl Application for ElevatorApp {
                         match lift.state {
                             State::Stop | State::Maintaining => Text::new("").width(Length::Units(20)).into(),
                             _ => loading_icon().width(Length::Units(20)).into()
-                        }
+                        },
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
