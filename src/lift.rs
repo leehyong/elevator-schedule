@@ -66,6 +66,7 @@ impl Lift {
     }
 
     pub async fn schedule_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        println!("schedule,电梯#{},[{}前往{}]",no + 1, cur_floor, dest_floor);
         Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::ScheduleArrive(no, dest_floor)
     }
@@ -82,16 +83,19 @@ impl Lift {
     }
 
     pub async fn schedule_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        println!("schedule,电梯#{}-已到达{}层，正在等待进出...",no + 1, dest_floor);
         Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::ScheduleWaitUserInputFloor(no, dest_floor)
     }
 
     pub async fn running_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        println!("running,电梯#{},[{}前往{}]",no + 1, cur_floor, dest_floor);
         Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::RunningArrive(no, dest_floor)
     }
 
     pub async fn running_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        println!("running,电梯#{}-已到达{}层，正在等待进出...",no + 1, dest_floor);
         Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::RunningWaitUserInputFloor(no, dest_floor)
     }
