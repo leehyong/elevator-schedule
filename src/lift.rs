@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeSet, LinkedList};
 use std::fmt::{Display, Formatter};
 use crate::conf::TFloor;
@@ -50,5 +51,24 @@ pub struct LiftUpDownCost {
     pub no: usize,
     pub cost: i32,
     pub cnt: usize,
-    pub direction: Direction,
+}
+
+
+impl PartialEq<Self> for LiftUpDownCost {
+    fn eq(&self, other: &Self) -> bool {
+        return self.cost == other.cost && self.cnt == other.cnt
+    }
+}
+
+impl PartialOrd for LiftUpDownCost {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self.cost.cmp(&other.cost) {
+            Ordering::Less => Some(Ordering::Less),
+            Ordering::Greater => Some(Ordering::Greater),
+            Ordering::Equal => {
+                // 反转
+                other.cnt.partial_cmp(&self.cnt)
+            }
+        }
+    }
 }

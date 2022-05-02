@@ -86,7 +86,6 @@ impl ElevatorApp {
     }
 
     fn handle_up_floors(&self, floors: &[TFloor]) -> Vec<LiftUpDownCost> {
-        // todo , 怎么规划，才能做到最小代价？
         self.lifts
             .iter()
             .filter(
@@ -104,7 +103,6 @@ impl ElevatorApp {
                         }).sum();
                     LiftUpDownCost {
                         no,
-                        direction:Direction::Up,
                         cost,
                         cnt,
                     }
@@ -128,45 +126,68 @@ impl ElevatorApp {
                         }).sum();
                     LiftUpDownCost {
                         no,
-                        direction:Direction::Down,
                         cost,
                         cnt,
                     }
                 }).collect()
     }
+    fn set_lift(&mut self, no:usize, direction: Direction) {
+        let mut lift = &mut self.lifts[no];
+        let mut num = 0;
+        self.wait_floors
+            .iter()
+            .filter(|wf| {
+                match direction {
+                    Direction::Up => wf.floor >= lift.cur_floor,
 
+                    Direction::Down => wf.floor <= lift.cur_floor
+                }
+            })
+            .for_each(|wf| {
+                num += 1;
+                self.lifts[up.no].schedule_floors.insert(wf.floor);
+            });
+        if num > 0 {
+            lift.state = match direction {
+                Direction::Up => State::GoingUp,
+                Direction::Down => State::GoingDown,
+            };
+        }
+    }
 
     fn schedule_stopped_lift(&mut self, up_floors: &[TFloor], down_floors: &[TFloor]) {
-        // 上行代价和下行代价相同是，尽量去接 楼层数更多的
-        // 最小的上行代价
-        let up = self.handle_up_floors(up_floors);
-        let down = self.handle_down_floors(down_floors);
-        // match up.no {
-        //     Some(up) => {
-        //         match down.no {
-        //             Some(down) => {
-        //                 let up_lift = &mut self.lifts[up];
-        //                 floors
-        //                     .iter()
-        //                     .filter(|o| **o >= up_lift.cur_floor)
-        //                     .for_each(|v| {
-        //                         lift.schedule_floors.insert(*v);
-        //                     });
-        //                 if up != down {
-        //                     let down_lift = &mut self.lifts[down];
-        //                     floors
-        //                         .iter()
-        //                         .filter(|o| **o <= down_lift.cur_floor)
-        //                         .for_each(|v| {
-        //                             lift.schedule_floors.insert(*v);
-        //                         });
-        //                 }
-        //             }
-        //             None => {}
-        //         }
-        //     }
-        //     None => {}
-        // }
+        // 上行代价和下行代价相同时，尽量去接 楼层数更多的
+        // 最小的上下行代价
+        let mut ups = self.handle_up_floors(up_floors);
+        let mut downs = self.handle_down_floors(down_floors);
+        ups.sort();
+        downs.sort();
+        assert_eq!(ups.len(), downs.len());
+        // ups 和 downs 数量肯定相同
+        if ups.is_empty() {
+            return;
+        }
+        let mut up = &ups[0];
+        let mut down = &downs[0];
+        if ups.len() == 1 {
+            if up <= down {
+                self.set_lift(up.no, Direction::Up);
+            } else {
+                self.set_lift(up.no, Direction::Up);
+            }
+        }else {
+            // 超过1部电梯是静止
+            // 上下，都是同一部电梯时，就使用对应的第二部电梯来做判断了
+            if up.no == down.no {
+                if up <= down {
+                    down = &downs[1];
+                }else{
+                    up = &ups[1];
+                }
+            }
+            self.set_lift(up.no, Direction::Up);
+            self.set_lift(down.no, Direction::Down);
+        }
     }
 
     fn schedule_running_lift(&mut self) {
