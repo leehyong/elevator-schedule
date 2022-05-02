@@ -2,7 +2,7 @@ use rand::{Rng, thread_rng};
 use crate::conf::{MAX_FLOOR, MIN_FLOOR, TFloor};
 
 pub fn random_num(start: i32, end: i32) -> i32 {
-    thread_rng().gen_range(start..=start)
+    thread_rng().gen_range(start..=end)
 }
 
 pub fn random_floor() -> i32 {
