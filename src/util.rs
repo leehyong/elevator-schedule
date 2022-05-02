@@ -18,3 +18,6 @@ pub fn random_floor() -> i32 {
 pub fn random_person_num() -> i32 {
     random_num(0, 20)
 }
+pub fn random_bool() -> bool {
+    random_num(0, 20) > 10
+}

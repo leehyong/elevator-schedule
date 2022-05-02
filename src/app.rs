@@ -2,13 +2,14 @@
 
 use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap, LinkedList};
+use std::option::Option::Some;
 use std::time::{Duration, Instant};
 use crate::message::*;
 use iced::*;
 use iced::futures::SinkExt;
 use iced::window::Mode;
 use rand::{Rng, thread_rng};
-use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MIN_FLOOR, TFloor};
+use crate::conf::{MAX_ELEVATOR_NUM, MAX_FLOOR, MAX_PERSON_CAPACITY, MIN_FLOOR, TFloor};
 use crate::util::*;
 use crate::floor_btn::{Direction, FloorBtnState, WaitFloorTxtState};
 use crate::icon::*;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 use crate::lift::{Lift, LiftUpDownCost};
 use crate::up_down_elevator_floor::*;
 use crate::state::State;
+use crate::state::State::GoingUp;
 
 
 struct ElevatorApp {
@@ -274,7 +276,7 @@ impl ElevatorApp {
                     }
                 }
             }
-            if !ignore{
+            if !ignore {
                 match wf.direction {
                     Direction::Up => {
                         remain_up_floors.push(wf.floor);
@@ -343,6 +345,7 @@ impl Application for ElevatorApp {
     }
 
     fn update(&mut self, message: Self::Message, clipboard: &mut Clipboard) -> Command<Self::Message> {
+        println!("{:?}", message);
         match message {
             AppMessage::SliderChange(floor) => {
                 if floor != 0 {
@@ -381,23 +384,141 @@ impl Application for ElevatorApp {
                 self.set_random_floor();
             }
             AppMessage::Scheduling => {
-                println!("电梯调度");
                 return self.schedule();
             }
             AppMessage::Scheduled => {
-                // todo
                 println!("电梯调度完成了");
-                self.lifts
-                    .iter()
-                    .filter(|item| !item.schedule_floors.is_empty())
-                    .for_each(|lift| {
-                        let no = lift.no;
-                        let cur_floor = lift.cur_floor;
-                        let dest_floor = *lift.schedule_floors.iter().next().unwrap();
-                        Command::perform(async move{
-                            crate::lift::Lift::suspend_one_by_one_floor(no, cur_floor, dest_floor);
-                        }, |msg| msg);
-                    });
+                return Command::batch(
+                    self.lifts
+                        .iter()
+                        .filter(|item| !item.schedule_floors.is_empty())
+                        .map(|lift| {
+                            let no = lift.no;
+                            let cur_floor = lift.cur_floor;
+                            let dest_floor = *lift.schedule_floors.iter().next().unwrap();
+                            Command::perform(async move {
+                                crate::lift::Lift::schedule_suspend_one_by_one_floor(no, cur_floor, dest_floor).await
+                            }, |msg| msg)
+                        })
+                );
+            }
+
+            AppMessage::ScheduleArrive(no, floor) => {
+                let lift = &mut self.lifts[no];
+                lift.state = match lift.state {
+                    State::GoingUp => State::GoingUpSuspend,
+                    State::GoingDown => State::GoingDownSuspend,
+                    _ => unreachable!()
+                };
+                lift.cur_floor = floor;
+                println!("电梯#{},已达到楼层{},正在等人进出。", no, floor);
+                return Command::perform(async move {}, move |_| AppMessage::LiftRunningByOne(no));
+            }
+            AppMessage::ScheduleWaitUserInputFloor(no, floor) => {
+                let lift = &mut self.lifts[no];
+                lift.can_click_btn = true;
+                lift.state = match lift.state {
+                    State::GoingUpSuspend => State::GoingUp,
+                    State::GoingDownSuspend => State::GoingDown,
+                    _ => unreachable!()
+                };
+                let mut first = 0;
+                if let Some(schedule_first) = lift.schedule_floors.iter().next() {
+                    first = *schedule_first;
+                }
+                if first > 0 {
+                    lift.schedule_floors.remove(&first);
+                }
+                println!("电梯#{}-{}层,{}", no, floor, lift.state.to_string());
+            }
+
+            AppMessage::LiftRunningByOne(no) => {
+                let mut cmds = vec![];
+                let lift = &self.lifts[no];
+                let no = lift.no;
+                let cur_floor = lift.cur_floor;
+                for floor in lift.stop_floors.union(&lift.schedule_floors) {
+                    let floor = *floor;
+                    cmds.push(Command::perform(async move {
+                        Lift::running_suspend_one_by_one_floor(no, cur_floor, floor).await
+                    }, |msg| msg))
+                }
+                return Command::batch(cmds);
+            }
+
+            AppMessage::LiftRunning => {
+                let mut cmds = vec![];
+                for lift in self.lifts.iter() {
+                    let no = lift.no;
+                    cmds.push(Command::perform(async move {}, move |_| AppMessage::LiftRunningByOne(no)))
+                }
+                return Command::batch(cmds);
+            }
+
+            AppMessage::RunningArrive(no, floor) => {
+                let lift = &mut self.lifts[no];
+                lift.cur_floor = floor;
+                // 从调度队列、用户输入队列中删除到达的楼层 floor
+                lift.schedule_floors.remove(&floor);
+                lift.stop_floors.remove(&floor);
+                lift.state = match lift.state {
+                    State::GoingUp => {
+                        if lift.stop_floors.is_empty() && lift.schedule_floors.is_empty() {
+                            State::Stop
+                        } else {
+                            State::GoingUpSuspend
+                        }
+                    }
+                    State::GoingDown => {
+                        if lift.stop_floors.is_empty() && lift.schedule_floors.is_empty() {
+                            State::Stop
+                        } else {
+                            State::GoingDownSuspend
+                        }
+                    }
+                    _ => unreachable!()
+                };
+                println!("电梯#{},已达到楼层{},正在等人进出。", no, floor);
+                if lift.state == State::Stop {
+                    lift.persons = 0;
+                    return Command::none();
+                }
+                let n = random_person_num();
+                // 随机人数的进出
+                if random_bool() {
+                    lift.persons += n;
+                    lift.persons = min(lift.persons, MAX_PERSON_CAPACITY as i32);
+                } else {
+                    lift.persons -= n;
+                    lift.persons = max(lift.persons, 0);
+                    if lift.persons == 0 {
+                        // 没有人了， 电梯就不用运行了
+                        lift.schedule_floors.clear();
+                        lift.stop_floors.clear();
+                        return Command::none();
+                    }
+                }
+                let mut dest_floor = 0;
+                if let Some(flor) = lift.stop_floors.union(&lift.schedule_floors).into_iter().next() {
+                    dest_floor = *flor;
+                }
+                assert!(dest_floor > 0);
+                return Command::perform(async move {
+                    crate::lift::Lift::running_user_input_one_by_one_floor(no, floor, dest_floor).await
+                }, |msg| msg);
+            }
+
+            AppMessage::RunningWaitUserInputFloor(no, floor) => {
+                let lift = &mut self.lifts[no];
+                lift.state = match lift.state {
+                    State::GoingUpSuspend => State::GoingUp,
+                    State::GoingDownSuspend => State::GoingDown,
+                    _ => unreachable!()
+                };
+                let cur_floor = lift.cur_floor;
+                return Command::perform(async move {
+                    crate::lift::Lift::running_suspend_one_by_one_floor(no, cur_floor, floor).await
+                }, |msg| msg);
             }
 
             AppMessage::ClickedBtnFloor(no, floor) => {
@@ -430,8 +551,11 @@ impl Application for ElevatorApp {
         Subscription::batch(vec![
             time::every(Duration::from_secs(3))
                 .map(|_| AppMessage::Scheduling),
+            time::every(Duration::from_secs(3))
+                .map(|_| AppMessage::LiftRunning),
         ])
     }
+
     fn view(&mut self) -> Element<'_, Self::Message> {
         let mut subs = vec![];
         let slider = Slider::new(

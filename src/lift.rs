@@ -8,6 +8,26 @@ use crate::state::State;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
+
+// 电梯
+#[derive(Default)]
+pub struct Lift {
+    // 电梯序号
+    pub no: usize,
+    // 电梯运行状态
+    pub state: State,
+    // 电梯内所搭载的人数
+    pub persons: i32,
+    // 电梯当前停靠楼层
+    pub cur_floor: TFloor,
+    // 用户输入的停靠楼层
+    pub stop_floors: BTreeSet<TFloor>,
+    pub can_click_btn: bool,
+    // 调度器调度的停靠楼层
+    // 上行时，schedule_floors 的元素值 > cur_floor
+    // 下行时，schedule_floors 的元素值 < cur_floor
+    pub schedule_floors: BTreeSet<TFloor>,
+}
 lazy_static!(
     static ref LiftSuspendLocks: HashMap<usize,Arc<Mutex<bool>>> = {
         let mut ret = HashMap::with_capacity(MAX_ELEVATOR_NUM);
@@ -26,26 +46,6 @@ lazy_static!(
     };
 );
 
-// 电梯
-#[derive(Default)]
-pub struct Lift {
-    // 电梯序号
-    pub no: usize,
-    // 电梯运行状态
-    pub state: State,
-    // 电梯内所搭载的人数
-    pub persons: i32,
-    // 电梯当前停靠楼层
-    pub cur_floor: TFloor,
-    // 用户输入的停靠楼层
-    pub stop_floors: BTreeSet<TFloor>,
-    // 调度器调度的停靠楼层
-    // 上行时，schedule_floors 的元素值 > cur_floor
-    // 下行时，schedule_floors 的元素值 < cur_floor
-    pub schedule_floors: BTreeSet<TFloor>,
-}
-
-
 impl Lift {
     pub fn new(no: usize) -> Self {
         let mut r = Self::default();
@@ -54,17 +54,46 @@ impl Lift {
         r
     }
 
-    pub async fn suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+    async fn suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor){
         let lock = LiftSuspendLocks.get(&no).unwrap();
-        lock.lock
+        // 每部电梯一个锁， 从而保证消息的顺序性
+        lock.lock().await;
+        // 通过sleep ，模拟电梯在运行到了
         tokio::time::sleep(
             std::time::Duration::from_millis(
                 ((dest_floor - cur_floor).abs() as u64)) * EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS
         ).await;
-        AppMessage::ArriveSuspend(no, dest_floor)
     }
-    pub async fn run_one_by_one_floor2(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
-        AppMessage::Arrive(no, dest_floor)
+
+    pub async fn schedule_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
+        AppMessage::ScheduleArrive(no, dest_floor)
+    }
+
+    pub async fn user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        let lock = LiftUserInputLocks.get(&no).unwrap();
+        // 每部电梯一个锁， 从而保证消息的顺序性
+        lock.lock().await;
+        // 通过sleep ，模拟电梯在运行到了
+        tokio::time::sleep(
+            std::time::Duration::from_millis(500)
+        ).await;
+        AppMessage::ScheduleWaitUserInputFloor(no, dest_floor)
+    }
+
+    pub async fn schedule_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
+        AppMessage::ScheduleWaitUserInputFloor(no, dest_floor)
+    }
+
+    pub async fn running_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
+        AppMessage::RunningArrive(no, dest_floor)
+    }
+
+    pub async fn running_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
+        Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
+        AppMessage::RunningWaitUserInputFloor(no, dest_floor)
     }
 }
 

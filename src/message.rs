@@ -21,12 +21,18 @@ pub enum Message {
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
 pub enum AppMessage {
     Noop,
-    Scheduling, // 调度中
-    Scheduled,  // 调度完成
+    Scheduling,
+    // 调度中
+    Scheduled,
+    // 调度完成
     SliderChange(TFloor),
     SliderRelease(TFloor),
-    Arrive(usize, TFloor),
-    ArriveSuspend(usize, TFloor),
+    ScheduleArrive(usize, TFloor),
+    ScheduleWaitUserInputFloor(usize, TFloor),
+    RunningWaitUserInputFloor(usize, TFloor),
+    RunningArrive(usize, TFloor),
+    LiftRunning,
+    LiftRunningByOne(usize),
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,
