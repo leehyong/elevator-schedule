@@ -27,12 +27,12 @@ impl Display for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use State::*;
         write!(f, "{}", match self {
-            GoingUp => "电梯上行",
-            GoingDown => "电梯下行",
-            GoingUpSuspend => "电梯上行进出人",
-            GoingDownSuspend => "电梯下行进出人",
+            GoingUp => "上行",
+            GoingDown => "下行",
+            GoingUpSuspend => "上行进出人",
+            GoingDownSuspend => "下行进出人",
             Maintaining => "维护中",
-            Stop => "电梯静止"
+            Stop => "静止"
         })
     }
 }

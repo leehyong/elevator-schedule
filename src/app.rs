@@ -314,9 +314,6 @@ impl ElevatorApp {
                 return;
             }
         }
-        // let f = random_floor();
-        // self.floor = f;
-        // self.tmp_floor = f;
     }
 
     fn add_to_wait_floor(&mut self, direction: Direction) {
@@ -709,23 +706,35 @@ impl Application for ElevatorApp {
                 let status = Column::with_children(vec![
                     Row::with_children(vec![
                         Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.no + 1)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.no + 1)).width(Length::FillPortion(2)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("运行状态:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.state.to_string())).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.state.to_string())).color(
+                            match lift.state {
+                                State::Maintaining => Color::from_rgb8(250, 255, 51),
+                                State::Stop => Color::BLACK,
+                                State::GoingUp | State::GoingUpSuspend => Color::from_rgb8(255, 0, 0),
+                                State::GoingDown | State::GoingDownSuspend => Color::from_rgb8(0, 0, 255),
+                            }
+                        ).width(Length::FillPortion(2)).into(),
                         match lift.state {
-                            State::Stop | State::Maintaining => Text::new("").width(Length::Units(20)).into(),
-                            _ => loading_icon().width(Length::Units(20)).into()
+                            State::Stop | State::Maintaining => Text::new("")
+                                .width(Length::Units(20))
+                                .into(),
+                            _ => loading_icon()
+                                .color(Color::from_rgb8(51, 134, 255))
+                                .width(Length::Units(20))
+                                .into()
                         },
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.cur_floor)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.cur_floor)).width(Length::FillPortion(2)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("人数:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.persons)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.persons)).width(Length::FillPortion(2)).into(),
                     ]).spacing(10).padding(4).into(),
                 ]).width(Length::FillPortion(1))
                     .into();
