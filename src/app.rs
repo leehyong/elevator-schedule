@@ -408,12 +408,10 @@ impl Application for ElevatorApp {
 
             AppMessage::ScheduleArrive(no, floor) => {
                 let lift = &mut self.lifts[no];
-                if lift.state == State::Stop{
-                    return Command::none();
-                }
                 lift.state = match lift.state {
                     State::GoingUp | State::GoingUpSuspend => State::GoingUpSuspend,
                     State::GoingDown | State::GoingDownSuspend => State::GoingDownSuspend,
+                    State::Stop => State::Stop,
                     _ => {
                         println!("ScheduleArrive {:?}", lift.state);
                         unreachable!()
@@ -469,9 +467,6 @@ impl Application for ElevatorApp {
 
             AppMessage::RunningArrive(no, floor) => {
                 let lift = &mut self.lifts[no];
-                if lift.state == State::Stop{
-                    return Command::none();
-                }
                 lift.cur_floor = floor;
                 // 从调度队列、用户输入队列中删除到达的楼层 floor
                 lift.schedule_floors.remove(&floor);
@@ -493,7 +488,7 @@ impl Application for ElevatorApp {
                     }
                     State::GoingUpSuspend => State::GoingUp,
                     State::GoingDownSuspend => State::GoingDown,
-
+                    State::Stop => State::Stop,
                     _ => {
                         println!("电梯#{},{:?}", lift.no + 1, lift.state);
                         unreachable!();
