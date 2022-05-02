@@ -529,12 +529,12 @@ impl Application for ElevatorApp {
 
             AppMessage::RunningWaitUserInputFloor(no, floor) => {
                 let lift = &mut self.lifts[no];
-                if lift.state == State::Stop{
+                if lift.state == State::Stop {
                     return Command::none();
                 }
                 lift.state = match lift.state {
-                    State::GoingUpSuspend => State::GoingUp,
-                    State::GoingDownSuspend => State::GoingDown,
+                    State::GoingUpSuspend | State::GoingUp => State::GoingUp,
+                    State::GoingDownSuspend | State::GoingDown => State::GoingDown,
                     _ => {
                         println!("RunningWaitUserInputFloor#{},{}层,{:?}", lift.no + 1, lift.cur_floor, lift.state);
                         unreachable!()
@@ -692,22 +692,27 @@ impl Application for ElevatorApp {
             .iter_mut()
             .enumerate()
             .fold(rows, |mut _rows, (elevator_no, floors)| {
+                let lift = &self.lifts[elevator_no];
                 let status = Column::with_children(vec![
                     Row::with_children(vec![
                         Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", elevator_no + 1)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.no + 1)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("运行状态:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}运行中", elevator_no + 1)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.state.to_string())).width(Length::FillPortion(1)).into(),
+                        match lift.state {
+                            State::Stop | State::Maintaining => Text::new("").width(Length::Units(20)).into(),
+                            _ => loading_icon().width(Length::Units(20)).into()
+                        }
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", elevator_no + 1)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.cur_floor)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                     Row::with_children(vec![
                         Text::new("人数:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", 0)).width(Length::FillPortion(1)).into(),
+                        Text::new(format!("{}", lift.persons)).width(Length::FillPortion(1)).into(),
                     ]).spacing(10).padding(4).into(),
                 ]).width(Length::FillPortion(1))
                     .into();
