@@ -25,7 +25,8 @@ pub enum AppMessage {
     Scheduled,  // 调度完成
     SliderChange(TFloor),
     SliderRelease(TFloor),
-    Arrive(usize),
+    Arrive(usize, TFloor),
+    ArriveSuspend(usize, TFloor),
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,
