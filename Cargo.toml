@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 lazy_static = "1.4.0"
 rand = "0.8"
-iced = {version = "0.3.0", features = ["debug", "image", "tokio", "wgpu"]} # GUI
+iced = { version = "0.3", features = ["debug", "image", "tokio", "wgpu"] } # GUI
+tokio = { version = "1.18", features = ["full"] }

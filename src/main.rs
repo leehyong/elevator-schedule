@@ -18,7 +18,8 @@ pub mod util;
 use std::io::{Read, Write};
 // use scheduler::Scheduler;
 
-fn main() {
+#[tokio::main]
+async fn main() {
    // let mut schedule = Scheduler::new();
    //  schedule.run();
     app::run_window()

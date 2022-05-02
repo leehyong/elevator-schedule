@@ -3,7 +3,10 @@ use std::collections::{BTreeSet, LinkedList};
 use std::fmt::{Display, Formatter};
 use crate::conf::TFloor;
 use crate::floor_btn::Direction;
+use crate::message::AppMessage;
 use crate::state::State;
+use tokio::sync::RwLock;
+use std::sync::Arc;
 
 // 电梯
 #[derive(Default)]
@@ -24,6 +27,10 @@ pub struct Lift {
     pub schedule_floors: BTreeSet<TFloor>,
 }
 
+pub async fn run(lift: Arc<RwLock<Lift>>) -> AppMessage {
+    let no = lift.read().await.no;
+    AppMessage::Arrive(no)
+}
 
 impl Lift {
     pub fn new(no: usize) -> Self {
@@ -56,9 +63,10 @@ pub struct LiftUpDownCost {
 
 impl PartialEq<Self> for LiftUpDownCost {
     fn eq(&self, other: &Self) -> bool {
-        return self.cost == other.cost && self.cnt == other.cnt
+        return self.cost == other.cost && self.cnt == other.cnt;
     }
 }
+
 
 impl PartialOrd for LiftUpDownCost {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
