@@ -27,10 +27,10 @@ pub enum AppMessage {
     // 调度完成
     SliderChange(TFloor),
     SliderRelease(TFloor),
-    ScheduleArrive(usize, TFloor),
+    ScheduleArriveByOneFloor(usize, TFloor),
     ScheduleWaitUserInputFloor(usize, TFloor),
     RunningWaitUserInputFloor(usize, TFloor),
-    RunningArrive(usize, TFloor),
+    RunningArriveByOneFloor(usize, TFloor),
     LiftRunning,
     LiftRunningByOne(usize),
     ClickedBtnPlus,

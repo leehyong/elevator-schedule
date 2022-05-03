@@ -403,20 +403,32 @@ impl Application for ElevatorApp {
                 );
             }
 
-            AppMessage::ScheduleArrive(no, floor) => {
+            AppMessage::ScheduleArriveByOneFloor(no, floor) => {
                 let lift = &mut self.lifts[no];
-                lift.state = match lift.state {
-                    State::GoingUp | State::GoingUpSuspend => State::GoingUpSuspend,
-                    State::GoingDown | State::GoingDownSuspend => State::GoingDownSuspend,
-                    State::Stop => State::Stop,
-                    _ => {
-                        println!("ScheduleArrive {:?}", lift.state);
-                        unreachable!()
-                    }
-                };
-                lift.cur_floor = floor;
-                println!("电梯#{},已达到楼层{},正在等人进出。", no, floor);
-                return Command::perform(async move {}, move |_| AppMessage::LiftRunningByOne(no));
+                if floor > lift.cur_floor{
+                    lift.cur_floor += 1;
+                }else if floor < lift.cur_floor{
+                    lift.cur_floor -= 1;
+                }
+                return if lift.cur_floor == floor {
+                    lift.state = match lift.state {
+                        State::GoingUp | State::GoingUpSuspend => State::GoingUpSuspend,
+                        State::GoingDown | State::GoingDownSuspend => State::GoingDownSuspend,
+                        State::Stop => State::Stop,
+                        _ => {
+                            println!("ScheduleArriveByOneFloor {:?}", lift.state);
+                            unreachable!()
+                        }
+                    };
+                    println!("ScheduleArriveByOneFloor 电梯#{},已达到楼层{},正在等人进出。", no, floor);
+                    Command::perform(async move {},
+                                     move |_| AppMessage::LiftRunningByOne(no))
+                } else {
+                    Command::perform(async move {},
+                                     move |_| AppMessage::ScheduleArriveByOneFloor(no,floor))
+                }
+
+
             }
 
             AppMessage::ScheduleWaitUserInputFloor(no, floor) => {
@@ -463,9 +475,21 @@ impl Application for ElevatorApp {
                 return Command::none();
             }
 
-            AppMessage::RunningArrive(no, floor) => {
+            AppMessage::RunningArriveByOneFloor(no, floor) => {
                 let lift = &mut self.lifts[no];
-                lift.cur_floor = floor;
+                if floor > lift.cur_floor{
+                    lift.cur_floor += 1;
+                }else if floor < lift.cur_floor{
+                    lift.cur_floor -= 1;
+                }
+
+                if lift.cur_floor != floor{
+                    // 逐层逐层的运行
+                    let cur_floor = lift.cur_floor;
+                    return Command::perform(async move {
+                        Lift::running_suspend_one_by_one_floor(no, cur_floor, floor).await
+                    }, |msg| msg);
+                }
                 // 从调度队列、用户输入队列中删除到达的楼层 floor
                 lift.schedule_floors.remove(&floor);
                 let state = lift.state.clone();
@@ -504,7 +528,7 @@ impl Application for ElevatorApp {
                         unreachable!();
                     }
                 };
-                println!("电梯#{},已达到楼层{},正在等人进出。", no, floor);
+                println!("RunningArriveByOneFloor 电梯#{},已达到楼层{}{},正在等人进出。", no, floor, lift.state.to_string());
                 if lift.state == State::Stop {
                     lift.persons = 0;
                     return Command::none();
@@ -519,6 +543,7 @@ impl Application for ElevatorApp {
                     lift.persons = max(lift.persons, 0);
                     if lift.persons == 0 {
                         // 没有人了， 电梯就不用运行了
+                        lift.state = State::Stop;
                         lift.schedule_floors.clear();
                         lift.stop_floors.clear();
                         return Command::none();

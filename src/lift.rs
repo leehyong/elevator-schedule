@@ -54,21 +54,21 @@ impl Lift {
         r
     }
 
-    async fn suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor){
+    async fn suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) {
         let lock = LiftSuspendLocks.get(&no).unwrap();
         // 每部电梯一个锁， 从而保证消息的顺序性
         lock.lock().await;
         // 通过sleep ，模拟电梯在运行到了
         tokio::time::sleep(
             std::time::Duration::from_millis(
-                ((dest_floor - cur_floor).abs() as u64)) * EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS
+                EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS as u64)
         ).await;
     }
 
     pub async fn schedule_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
-        println!("schedule,电梯#{},[{}前往{}]",no + 1, cur_floor, dest_floor);
+        println!("schedule,电梯#{},[{}前往{}]", no + 1, cur_floor, dest_floor);
         Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
-        AppMessage::ScheduleArrive(no, dest_floor)
+        AppMessage::ScheduleArriveByOneFloor(no, dest_floor)
     }
 
     pub async fn user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
@@ -83,19 +83,19 @@ impl Lift {
     }
 
     pub async fn schedule_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
-        println!("schedule,电梯#{}-已到达{}层，正在等待进出...",no + 1, dest_floor);
+        println!("schedule,电梯#{}-已到达{}层，正在等待进出...", no + 1, dest_floor);
         Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::ScheduleWaitUserInputFloor(no, dest_floor)
     }
 
     pub async fn running_suspend_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
-        println!("running,电梯#{},[{}前往{}]",no + 1, cur_floor, dest_floor);
+        println!("running,电梯#{},[{}前往{}]", no + 1, cur_floor, dest_floor);
         Self::suspend_one_by_one_floor(no, cur_floor, dest_floor).await;
-        AppMessage::RunningArrive(no, dest_floor)
+        AppMessage::RunningArriveByOneFloor(no, dest_floor)
     }
 
     pub async fn running_user_input_one_by_one_floor(no: usize, cur_floor: TFloor, dest_floor: TFloor) -> AppMessage {
-        println!("running,电梯#{}-已到达{}层，正在等待进出...",no + 1, dest_floor);
+        println!("running,电梯#{}-已到达{}层，正在等待进出...", no + 1, dest_floor);
         Self::user_input_one_by_one_floor(no, cur_floor, dest_floor).await;
         AppMessage::RunningWaitUserInputFloor(no, dest_floor)
     }
