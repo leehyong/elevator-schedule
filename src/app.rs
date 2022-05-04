@@ -65,7 +65,7 @@ pub fn run_window() {
 
 const BTN_PER_ROW: TFloor = 15;
 const WAIT_FLOOR_PER_ROW: TFloor = 16;
-const MAX_WAIT_FLOOR_ROW_NUM: TFloor = 4;
+const MAX_WAIT_FLOOR_ROW_NUM: TFloor = 2;
 const MAX_WAIT_FLOOR_NUM: usize = (BTN_PER_ROW * MAX_WAIT_FLOOR_ROW_NUM) as usize;
 
 
@@ -210,7 +210,7 @@ impl ElevatorApp {
         for direction in [Direction::Up, Direction::Down] {
             let mut one_direction_floors = self.wait_floors
                 .iter()
-                .filter(|o| o.direction == direction)
+                .filter(|o| o.direction == direction && !o.is_scheduled)
                 .map(|o| {
                     UpDownElevatorFloor { floor: o.floor, typ: FloorType::Person }
                 })
@@ -258,7 +258,7 @@ impl ElevatorApp {
         // 2、或者从停止的电梯中，去选择合适的电梯去处理
         let mut remain_up_floors = vec![];
         let mut remain_down_floors = vec![];
-        for wf in self.wait_floors.iter() {
+        for wf in self.wait_floors.iter_mut() {
             let mut ignore = false;
             for lift in self.lifts.iter() {
                 if lift.state != State::Stop {
@@ -271,6 +271,7 @@ impl ElevatorApp {
                             if wf.direction == Direction::Up {
                                 // 不需要被选中
                                 ignore = true;
+                                wf.is_scheduled = true;
                                 break;
                             }
                         }
@@ -278,8 +279,15 @@ impl ElevatorApp {
                             if wf.direction == Direction::Down {
                                 // 不需要被选中
                                 ignore = true;
+                                wf.is_scheduled = true;
                                 break;
                             }
+                        }
+                        State::Stop =>{
+                            // 不需要被选中
+                            ignore = true;
+                            wf.is_scheduled = true;
+                            break;
                         }
                         _ => {}
                     }
@@ -329,6 +337,7 @@ impl ElevatorApp {
         let fi = WaitFloorTxtState {
             floor: self.floor,
             direction,
+            is_scheduled:false,
         };
         if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() {
             if !self.wait_floors.contains(&fi) {
@@ -487,18 +496,20 @@ impl Application for ElevatorApp {
                     .iter_mut()
                     .find(|o| o.floor == floor)
                     .unwrap();
-                // todo:  由于iced 的Button没有双击事件，此处无法正确模拟双击， 留待以后再解决 双击取消某楼层
-                if let Some(inst) = btn.last_pressed {
-                    // 在一定毫秒内毫秒内连续点击了多次，就认为是双击了
-                    println!("inst.elapsed().as_millis() < 1000_000 : {}, {}", inst.elapsed().as_millis() < 1000_000, inst.elapsed().as_micros());
-                    if inst.elapsed().as_millis() < 1000 {
-                        btn.is_active = false;
-                    }
-                    btn.last_pressed = None
-                } else {
-                    btn.is_active = true;
-                    btn.last_pressed = Some(Instant::now());
-                }
+                btn.is_active = !btn.is_active;
+                btn.last_pressed = Some(Instant::now());
+                // fixme:  由于iced 的Button没有双击事件，此处无法正确模拟双击， 留待以后再解决 双击取消某楼层
+                // if let Some(inst) = btn.last_pressed {
+                //     // 在一定毫秒内毫秒内连续点击了多次，就认为是双击了
+                //     println!("inst.elapsed().as_millis() < 1000_000 : {}, {}", inst.elapsed().as_millis() < 1000_000, inst.elapsed().as_micros());
+                //     if inst.elapsed().as_millis() < 1000 {
+                //         btn.is_active = false;
+                //     }
+                //     btn.last_pressed = None
+                // } else {
+                //     btn.is_active = true;
+                //     btn.last_pressed = Some(Instant::now());
+                // }
                 // println!("电梯#{},按了{}层, {}, {:?}", no, floor, btn.is_active, btn.last_pressed);
                 println!("电梯#{},按了{}层,", no + 1, floor);
             }
@@ -569,7 +580,7 @@ impl Application for ElevatorApp {
         let mut rows = vec![
             Column::with_children(vec![
                 Row::with_children(subs)
-                    .padding(10)
+                    .padding(4)
                     .width(Length::Fill)
                     .align_items(Align::Center).into(),
                 Container::new(Row::with_children(
@@ -614,63 +625,77 @@ impl Application for ElevatorApp {
                     ])
                     .width(Length::Fill)
                     .align_items(Align::Start)
-                ).height(Length::Units(110))
+                ).height(Length::Units(80))
                     .align_x(Align::Start)
                     .align_y(Align::Center)
                     .into(),
             ])
 
                 .width(Length::Fill)
-                .spacing(4)
+                .spacing(2)
                 .into(),
         ];
         let new_rows = self.lifts
             .iter_mut()
             .fold(rows, |mut _rows, lift| {
-                let status = Column::with_children(vec![
-                    Row::with_children(vec![
-                        Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.no + 1)).width(Length::FillPortion(2)).into(),
-                    ]).spacing(10).padding(4).into(),
-                    Row::with_children(vec![
-                        Text::new("运行状态:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.state.to_string())).color(
+                let status = Column::with_children(
+                    vec![
+                        Row::with_children(vec![
+                            Text::new("电梯编号:").width(Length::FillPortion(1)).into(),
+                            Text::new(format!("{}", lift.no + 1)).width(Length::FillPortion(2)).into(),
+                        ]).spacing(10).padding(4).into(),
+                        Row::with_children(vec![
+                            Text::new("运行状态:").width(Length::FillPortion(1)).into(),
+                            Text::new(format!("{}", lift.state.to_string())).color(
+                                match lift.state {
+                                    State::Maintaining => Color::from_rgb8(250, 255, 51),
+                                    State::Stop => Color::BLACK,
+                                    State::GoingUp | State::GoingUpSuspend => Color::from_rgb8(255, 0, 0),
+                                    State::GoingDown | State::GoingDownSuspend => Color::from_rgb8(0, 0, 255),
+                                }
+                            ).width(Length::FillPortion(2)).into(),
                             match lift.state {
-                                State::Maintaining => Color::from_rgb8(250, 255, 51),
-                                State::Stop => Color::BLACK,
-                                State::GoingUp | State::GoingUpSuspend => Color::from_rgb8(255, 0, 0),
-                                State::GoingDown | State::GoingDownSuspend => Color::from_rgb8(0, 0, 255),
-                            }
-                        ).width(Length::FillPortion(2)).into(),
-                        match lift.state {
-                            State::Stop | State::Maintaining => Text::new("")
-                                .width(Length::Units(20))
+                                State::Stop | State::Maintaining => Text::new("")
+                                    .width(Length::Units(20))
+                                    .into(),
+                                _ => loading_icon()
+                                    .color(Color::from_rgb8(51, 134, 255))
+                                    .width(Length::Units(20))
+                                    .into()
+                            },
+                        ]).spacing(10).padding(4).into(),
+                        Row::with_children(vec![
+                            Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
+                            Text::new(format!("{}", lift.cur_floor)).width(Length::FillPortion(2)).into(),
+                        ]).spacing(10).padding(4).into(),
+                        Row::with_children(vec![
+                            Text::new("人数:").width(Length::FillPortion(1)).into(),
+                            Text::new(format!("{}", lift.persons)).width(Length::FillPortion(2)).into(),
+                        ],).spacing(10).padding(4).into(),
+                        Row::with_children(vec![
+                            Text::new(lift
+                                .schedule_floors
+                                .iter()
+                                .map(|o|o.to_string())
+                                .collect::<Vec<_>>().join(","))
+                                .width(Length::Fill)
+                                .color(Color::from_rgb8(51, 161, 255 ))
                                 .into(),
-                            _ => loading_icon()
-                                .color(Color::from_rgb8(51, 134, 255))
-                                .width(Length::Units(20))
-                                .into()
-                        },
-                    ]).spacing(10).padding(4).into(),
-                    Row::with_children(vec![
-                        Text::new("所在楼层:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.cur_floor)).width(Length::FillPortion(2)).into(),
-                    ]).spacing(10).padding(4).into(),
-                    Row::with_children(vec![
-                        Text::new("人数:").width(Length::FillPortion(1)).into(),
-                        Text::new(format!("{}", lift.persons)).width(Length::FillPortion(2)).into(),
-                    ]).spacing(10).padding(4).into(),
-                ]).width(Length::FillPortion(1))
+                        ],).spacing(10).padding(4).into(),
+                    ]).width(Length::FillPortion(1))
                     .into();
                 let mut row_floors = Vec::with_capacity(Self::floor_rows() as usize);
                 let mut tmp_row = Vec::with_capacity(BTN_PER_ROW as usize);
                 let mut i = 1;
+                let lift_no = lift.no;
                 let floors = &mut lift.elevator_btns;
                 for f in floors
                     .iter_mut()
                     .enumerate()
                     .fold(vec![],
                           |mut row, (ix, floor)| {
+                              floor.can_click = lift.can_click_btn;
+                              floor.is_active = lift.stop_floors.contains(&floor.floor);
                               row.push(floor.floor_view());
                               row
                           }) {
@@ -707,7 +732,7 @@ impl Application for ElevatorApp {
                 _rows
             });
         Column::with_children(new_rows)
-            .spacing(30)
+            .spacing(10)
             .height(Length::Fill)
             .height(Length::Fill).into()
     }

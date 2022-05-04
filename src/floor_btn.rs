@@ -12,6 +12,7 @@ pub struct FloorBtnState {
     // 判定按钮双击
     pub last_pressed: Option<std::time::Instant>,
     pub is_active: bool,
+    pub can_click: bool,
     pub elevator_no: usize,
     pub state: button::State,
 }
@@ -19,15 +20,21 @@ pub struct FloorBtnState {
 
 impl FloorBtnState {
     pub fn floor_view(&mut self) -> Element<AppMessage> {
-        let mut btn = Button::new(&mut self.state,
-                                  Text::new(format!("{}", self.floor))
-                                      .horizontal_alignment(HorizontalAlignment::Center),
-        )
-            .width(Length::Units(30))
-            .on_press(
+        let mut txt = Text::new(format!("{}", self.floor))
+            .horizontal_alignment(HorizontalAlignment::Center);
+        if self.can_click {
+            txt = txt.color(Color::from_rgb8(51, 255, 251));
+        }
+        let mut btn = Button::new(
+            &mut self.state,
+            txt,
+        ).width(Length::Units(30));
+        if self.can_click {
+            btn = btn.on_press(
                 AppMessage::ClickedBtnFloor(self.elevator_no, self.floor)
             );
-        if self.last_pressed.is_some() && self.is_active {
+        }
+        if self.is_active {
             btn = btn.style(ActiveFloorBtnStyle::default());
         }
         btn.into()
@@ -59,18 +66,33 @@ impl Display for Direction {
 pub struct WaitFloorTxtState {
     pub floor: TFloor,
     pub direction: Direction,
+    pub is_scheduled: bool,
 }
 
+
 impl WaitFloorTxtState {
+    fn my_color(&self) -> Color {
+        if self.is_scheduled {
+            match self.direction {
+                Direction::Up => Color::from_rgb8(255, 0, 0),
+                Direction::Down => Color::from_rgb8(0, 0, 255),
+            }
+        } else {
+            Color::WHITE
+        }
+    }
+
     pub fn floor_view(&mut self) -> Element<AppMessage> {
+        let color = self.my_color();
         Container::new(
             Row::with_children(vec![
                 Text::new(format!("{}", self.floor))
+                    .color(color)
                     .horizontal_alignment(HorizontalAlignment::Center).into(),
                 match self.direction {
-                    Direction::Up => up_icon().into(),
-                    Direction::Down => down_icon().into(),
-                }
+                    Direction::Up => up_icon().color(color).into(),
+                    Direction::Down => down_icon().color(color).into(),
+                },
             ])
         ).width(Length::Units(50))
             .align_x(Align::Center)
