@@ -27,12 +27,12 @@ pub enum AppMessage {
     // 调度完成
     SliderChange(TFloor),
     SliderRelease(TFloor),
-    ScheduleArriveByOneFloor(usize, TFloor),
-    ScheduleWaitUserInputFloor(usize, TFloor),
-    RunningWaitUserInputFloor(usize, TFloor),
-    RunningArriveByOneFloor(usize, TFloor),
-    LiftRunning,
-    LiftRunningByOne(usize),
+    // 一层层的到达楼层
+    ArriveByOneFloor(usize),
+    // 到达某楼层之后等待用户的输入
+    WaitUserInputFloor(usize),
+    // LiftRunning,
+    // LiftRunningByOne(usize),
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,
