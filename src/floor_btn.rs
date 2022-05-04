@@ -23,7 +23,7 @@ impl FloorBtnState {
         let mut txt = Text::new(format!("{}", self.floor))
             .horizontal_alignment(HorizontalAlignment::Center);
         if self.can_click {
-            txt = txt.color(Color::from_rgb8(51, 255, 251));
+            txt = txt.color(Color::from_rgb8(255, 63, 51 ));
         }
         let mut btn = Button::new(
             &mut self.state,

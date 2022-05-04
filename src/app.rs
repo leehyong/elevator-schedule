@@ -283,7 +283,7 @@ impl ElevatorApp {
                                 break;
                             }
                         }
-                        State::Stop =>{
+                        State::Stop => {
                             // 不需要被选中
                             ignore = true;
                             wf.is_scheduled = true;
@@ -337,7 +337,7 @@ impl ElevatorApp {
         let fi = WaitFloorTxtState {
             floor: self.floor,
             direction,
-            is_scheduled:false,
+            is_scheduled: false,
         };
         if MAX_WAIT_FLOOR_NUM > self.wait_floors.len() {
             if !self.wait_floors.contains(&fi) {
@@ -492,12 +492,19 @@ impl Application for ElevatorApp {
 
             AppMessage::ClickedBtnFloor(no, floor) => {
                 let lift = &mut self.lifts[no];
-                let btn = lift.elevator_btns
-                    .iter_mut()
-                    .find(|o| o.floor == floor)
-                    .unwrap();
-                btn.is_active = !btn.is_active;
-                btn.last_pressed = Some(Instant::now());
+                if lift.can_click_btn {
+                    let btn = lift.elevator_btns
+                        .iter_mut()
+                        .find(|o| o.floor == floor)
+                        .unwrap();
+                    btn.is_active = !btn.is_active;
+                    btn.last_pressed = Some(Instant::now());
+                    if btn.is_active {
+                        lift.stop_floors.insert(floor);
+                    } else {
+                        lift.stop_floors.remove(&floor);
+                    }
+                }
                 // fixme:  由于iced 的Button没有双击事件，此处无法正确模拟双击， 留待以后再解决 双击取消某楼层
                 // if let Some(inst) = btn.last_pressed {
                 //     // 在一定毫秒内毫秒内连续点击了多次，就认为是双击了
@@ -671,17 +678,17 @@ impl Application for ElevatorApp {
                         Row::with_children(vec![
                             Text::new("人数:").width(Length::FillPortion(1)).into(),
                             Text::new(format!("{}", lift.persons)).width(Length::FillPortion(2)).into(),
-                        ],).spacing(10).padding(4).into(),
+                        ], ).spacing(10).padding(4).into(),
                         Row::with_children(vec![
                             Text::new(lift
                                 .schedule_floors
                                 .iter()
-                                .map(|o|o.to_string())
+                                .map(|o| o.to_string())
                                 .collect::<Vec<_>>().join(","))
                                 .width(Length::Fill)
-                                .color(Color::from_rgb8(51, 161, 255 ))
+                                .color(Color::from_rgb8(51, 161, 255))
                                 .into(),
-                        ],).spacing(10).padding(4).into(),
+                        ], ).spacing(10).padding(4).into(),
                     ]).width(Length::FillPortion(1))
                     .into();
                 let mut row_floors = Vec::with_capacity(Self::floor_rows() as usize);
