@@ -74,22 +74,28 @@ impl ElevatorApp {
         Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
     }
 
-    fn remove_wait_floor(wait_floors: &mut LinkedList<WaitFloorTxtState>, floor: TFloor, state: State) {
+    fn remove_wait_floor(wait_floors: &mut LinkedList<WaitFloorTxtState>, floor: TFloor, lift: &Lift)
+    {
         // 删除正在等待的楼层
-        if let Some((idx, _)) = wait_floors
-            .iter()
-            .enumerate()
-            .find(|(_, wf)| wf.floor == floor && {
-                match state {
-                    State::GoingUp | State::GoingUpSuspend => wf.direction == Direction::Up,
-                    State::GoingDown | State::GoingDownSuspend => wf.direction == Direction::Down,
-                    State::Stop => true,
-                    State::Maintaining => false,
-                }
-            }) {
-            let mut after = wait_floors.split_off(idx);
-            after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
-            wait_floors.append(&mut after);
+        loop {
+            if let Some((idx, _)) = wait_floors
+                .iter()
+                .enumerate()
+                .find(|(_, wf)| wf.floor == floor && {
+                    match lift.state {
+                        State::GoingUp | State::GoingUpSuspend => wf.direction == Direction::Up,
+                        State::GoingDown | State::GoingDownSuspend => wf.direction == Direction::Down,
+                        State::Stop => true,
+                        State::Maintaining => false,
+                    }
+                }) {
+                println!("{}, idx:{}", lift.to_string(), idx);
+                let mut after = wait_floors.split_off(idx);
+                after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
+                wait_floors.append(&mut after);
+            } else {
+                break;
+            }
         }
     }
 
@@ -416,7 +422,7 @@ impl Application for ElevatorApp {
                             State::Maintaining => {
                                 return Command::none();
                             }
-                            _ =>{}
+                            _ => {}
                         }
                     }
                     if lift.state == State::GoingUp {
@@ -440,7 +446,7 @@ impl Application for ElevatorApp {
                             }
                         };
                         lift.remove_floor(dest_floor);
-                        Self::remove_wait_floor(&mut self.wait_floors, dest_floor, lift.state.clone());
+                        Self::remove_wait_floor(&mut self.wait_floors, dest_floor, &lift);
                         println!("ArriveByOneFloor 电梯#{},已达到楼层{},正在等人进出。", no, dest_floor);
                         return Command::perform(async move {}, move |_| AppMessage::WaitUserInputFloor(no));
                     }
@@ -460,11 +466,14 @@ impl Application for ElevatorApp {
                 lift.state = match lift.state {
                     State::GoingUpSuspend => State::GoingUp,
                     State::GoingDownSuspend => State::GoingDown,
+                    State::Stop => State::Stop,
                     _ => unreachable!()
                 };
                 lift.set_persons();
                 if lift.persons != 0 {
                     lift.can_click_btn = true;
+                } else {
+                    lift.persons = 0;
                 }
                 println!("电梯#{}-{}层,{}", no, lift.cur_floor, lift.state.to_string());
                 return Command::perform(async move {
