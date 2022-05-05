@@ -41,7 +41,7 @@ impl FloorBtnState {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum Direction {
     Up,
     Down,

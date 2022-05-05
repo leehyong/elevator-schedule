@@ -2,7 +2,14 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use crate::conf::TFloor;
 
-#[derive(PartialOrd, PartialEq, Debug)]
+#[derive(Copy, Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum EState {
+    Running,
+    Stop,
+    Noop,
+}
+
+#[derive(Copy, Clone,Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum FloorType {
     Person,
     Elevator(usize),
@@ -14,14 +21,15 @@ impl Default for FloorType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,)]
 pub struct UpDownElevatorFloor {
     pub floor: TFloor,
     pub typ: FloorType,
+    pub state: EState,
 }
 
-impl UpDownElevatorFloor  {
-    fn inner_cmp(&self, other: &Self) ->Ordering{
+impl UpDownElevatorFloor {
+    fn inner_cmp(&self, other: &Self) -> Ordering {
         if self.floor < other.floor {
             Ordering::Less
         } else if self.floor > other.floor {
@@ -40,7 +48,19 @@ impl UpDownElevatorFloor  {
                 Elevator(v1) => {
                     match other.typ {
                         Person => Ordering::Greater,
-                        Elevator(v2) => v1.partial_cmp(&v2).unwrap()
+                        Elevator(v2) => {
+                            match self.state {
+                                EState::Running => {
+                                    match other.state {
+                                        EState::Running => {
+                                            v1.cmp(&v2)
+                                        }
+                                        _ => Ordering::Greater
+                                    }
+                                }
+                                _ => Ordering::Less
+                            }
+                        }
                     }
                 }
             }
@@ -71,16 +91,16 @@ impl Ord for UpDownElevatorFloor {
 
 impl Display for FloorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f , "{}", match self {
+        write!(f, "{}", match self {
             FloorType::Elevator(v) => format!("Elevator({})", v),
             FloorType::Person => "Person".to_string()
-        } )
+        })
     }
 }
 
 
 impl Display for UpDownElevatorFloor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f , "{}-{}", self.floor, self.typ)
+        write!(f, "{}-{}", self.floor, self.typ)
     }
 }

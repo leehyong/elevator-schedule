@@ -1,4 +1,5 @@
 use crate::conf::TFloor;
+use crate::floor_btn::Direction;
 
 #[derive(Clone)]
 pub enum Message {
@@ -23,6 +24,8 @@ pub enum AppMessage {
     Noop,
     Scheduling,
     // 调度中
+    Scheduling2(TFloor, Direction),
+    // Scheduled2(TFloor, Direction),
     Scheduled,
     // 调度完成
     SliderChange(TFloor),

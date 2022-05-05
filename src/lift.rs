@@ -78,6 +78,9 @@ impl Lift {
         self.schedule_floors.remove(&floor);
         self.stop_floors.remove(&floor);
     }
+    pub fn is_overload(&self) ->bool{
+        self.persons > MAX_PERSON_CAPACITY as i32
+    }
 
     pub fn set_persons(&mut self) {
         let n = random_person_num();

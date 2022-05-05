@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::lift::{Lift, LiftUpDownCost};
 use crate::up_down_elevator_floor::*;
 use crate::state::State;
-use crate::state::State::GoingUp;
+use crate::state::State::{GoingDown, GoingUp};
 
 
 struct ElevatorApp {
@@ -205,111 +205,162 @@ impl ElevatorApp {
             self.set_stopped_lift(down.no, Direction::Down);
         }
     }
-
-    fn schedule_running_lift(&mut self) {
-        for direction in [Direction::Up, Direction::Down] {
-            let mut one_direction_floors = self.wait_floors
-                .iter()
-                .filter(|o| o.direction == direction && !o.is_scheduled)
-                .map(|o| {
-                    UpDownElevatorFloor { floor: o.floor, typ: FloorType::Person }
-                })
-                .collect::<Vec<_>>();
-            for lift in self.lifts.iter() {
+    /*
+        fn schedule_running_lift(&mut self) {
+            for direction in [Direction::Up, Direction::Down] {
+                let mut one_direction_floors = self.wait_floors
+                    .iter()
+                    .filter(|o| o.direction == direction && !o.is_scheduled)
+                    .map(|o| {
+                        UpDownElevatorFloor { floor: o.floor, typ: FloorType::Person }
+                    })
+                    .collect::<Vec<_>>();
+                for lift in self.lifts.iter() {
+                    match direction {
+                        Direction::Up => {
+                            if lift.state == State::GoingUp || lift.state == State::GoingUpSuspend {
+                                one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
+                            }
+                        }
+                        Direction::Down => {
+                            if lift.state == State::GoingDown || lift.state == State::GoingDownSuspend {
+                                one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
+                            }
+                        }
+                    }
+                }
+                // 通过排序， 确定每个电梯应该响应哪些楼层
                 match direction {
-                    Direction::Up => {
-                        if lift.state == State::GoingUp || lift.state == State::GoingUpSuspend {
-                            one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
-                        }
-                    }
-                    Direction::Down => {
-                        if lift.state == State::GoingDown || lift.state == State::GoingDownSuspend {
-                            one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
-                        }
-                    }
+                    // 上升， 升序
+                    Direction::Up => one_direction_floors.sort(),
+                    // 下降， 降序
+                    Direction::Down => one_direction_floors.sort_by(|a, b| b.cmp(a))
                 }
-            }
-            // 通过排序， 确定每个电梯应该响应哪些楼层
-            match direction {
-                // 上升， 升序
-                Direction::Up => one_direction_floors.sort(),
-                // 下降， 降序
-                Direction::Down => one_direction_floors.sort_by(|a, b| b.cmp(a))
-            }
-            let mut elevator = None;
-            for item in one_direction_floors {
-                match item.typ {
-                    FloorType::Elevator(idx) => {
-                        elevator = Some(&mut self.lifts[idx])
-                    }
-                    FloorType::Person => {
-                        if let Some(ref mut ele) = elevator {
-                            ele.schedule_floors.insert(item.floor);
+                let mut elevator = None;
+                for item in one_direction_floors {
+                    match item.typ {
+                        FloorType::Elevator(idx) => {
+                            elevator = Some(&mut self.lifts[idx])
+                        }
+                        FloorType::Person => {
+                            if let Some(ref mut ele) = elevator {
+                                ele.schedule_floors.insert(item.floor);
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    fn schedule(&mut self) -> Command<AppMessage> {
-        // 1、优先从运行的的电梯中，去选择合适的电梯去处理
-        self.schedule_running_lift();
-        // 2、或者从停止的电梯中，去选择合适的电梯去处理
-        let mut remain_up_floors = vec![];
-        let mut remain_down_floors = vec![];
-        for wf in self.wait_floors.iter_mut() {
-            let mut ignore = false;
-            for lift in self.lifts.iter() {
-                if lift.state != State::Stop {
-                    continue;
-                }
-                // 方向一直性检查
-                if lift.schedule_floors.contains(&wf.floor) {
-                    match lift.state {
-                        State::GoingUp | State::GoingUpSuspend => {
-                            if wf.direction == Direction::Up {
-                                // 不需要被选中
-                                ignore = true;
-                                wf.is_scheduled = true;
-                                break;
-                            }
-                        }
-                        State::GoingDown | State::GoingDownSuspend => {
-                            if wf.direction == Direction::Down {
-                                // 不需要被选中
-                                ignore = true;
-                                wf.is_scheduled = true;
-                                break;
-                            }
-                        }
-                        State::Stop => {
-                            // 不需要被选中
-                            ignore = true;
-                            wf.is_scheduled = true;
-                            break;
-                        }
-                        _ => {}
-                    }
+    */
+    fn new_up_down_elevator(&self, floor: TFloor, typ: FloorType) -> UpDownElevatorFloor {
+        match typ {
+            FloorType::Person => UpDownElevatorFloor {
+                floor,
+                typ,
+                state: EState::Noop,
+            },
+            FloorType::Elevator(no) => {
+                UpDownElevatorFloor {
+                    floor,
+                    typ,
+                    state: match self.lifts[no].state {
+                        State::Stop => EState::Stop,
+                        State::Maintaining => EState::Noop,
+                        _ => EState::Running
+                    },
                 }
             }
-            if !ignore {
-                match wf.direction {
-                    Direction::Up => {
-                        remain_up_floors.push(wf.floor);
-                    }
-                    Direction::Down => {
-                        remain_down_floors.push(wf.floor);
+        }
+    }
+
+    fn schedule2(&mut self, floor: TFloor, direction: Direction) -> Command<AppMessage> {
+        let mut a = vec![self.new_up_down_elevator(floor, FloorType::Person)];
+        a.extend(self.lifts
+            .iter()
+            .filter(|lift| lift.state == State::Stop ||
+                match direction {
+                    Direction::Up => ((lift.state == State::GoingUp || lift.state == State::GoingUpSuspend)
+                        && lift.cur_floor <= floor),
+                    Direction::Down => ((lift.state == State::GoingDown || lift.state == State::GoingDownSuspend)
+                        && lift.cur_floor >= floor),
+                })
+            // 不能超载
+            .filter(|lift| !lift.is_overload())
+            .map(|o| self.new_up_down_elevator(o.cur_floor, FloorType::Elevator(o.no)))
+        );
+        a.shrink_to_fit();
+        match direction {
+            Direction::Up => a.sort(),
+            Direction::Down => a.sort_by(|a, b| b.cmp(a)),
+        }
+        let mut top_lift = None;
+        let mut down_lift = None;
+        let mut find = false;
+        for item in a {
+            match item.typ {
+                FloorType::Person => find = true,
+                FloorType::Elevator(no) => {
+                    if !find {
+                        top_lift = Some(no);
+                    } else {
+                        down_lift = Some(no);
+                        break;
                     }
                 }
             }
         }
-        self.schedule_stopped_lift(&remain_up_floors, &remain_down_floors);
-        Command::perform(async {}, |_| {
-            AppMessage::Scheduled
-        })
+        if top_lift.is_some() || down_lift.is_some() {
+            let lift_idx;
+            match top_lift {
+                Some(top) => {
+                    match down_lift {
+                        Some(down) => {
+                            let top_diff = floor - self.lifts[top].cur_floor;
+                            let down_diff = self.lifts[down].cur_floor - floor;
+                            assert!(top_diff > 0);
+                            assert!(down_diff > 0);
+                            if top_diff >= down_diff {
+                                lift_idx = down
+                            } else {
+                                lift_idx = top;
+                            }
+                        }
+                        _ => lift_idx = top
+                    }
+                }
+                _ => {
+                    match down_lift {
+                        Some(down) => {
+                            lift_idx = down;
+                        }
+                        _ => unreachable!()
+                    }
+                }
+            }
+            let lift = &mut self.lifts[lift_idx];
+            lift.schedule_floors.insert(floor);
+            if lift.state == State::Stop {
+                if lift.cur_floor > floor {
+                    lift.state = State::GoingDown;
+                } else if lift.cur_floor < floor {
+                    lift.state = State::GoingUp;
+                } else {
+                    // 在同一个楼层时， 就开门进出人就可以了
+                    match direction {
+                        Direction::Up => lift.state = State::GoingUpSuspend,
+                        Direction::Down => lift.state = State::GoingDownSuspend,
+                    }
+                    lift.set_persons();
+                }
+            }
+            self.wait_floors
+                .iter_mut()
+                .filter(|wf| wf.floor == floor && wf.direction == direction)
+                .for_each(|wf| wf.is_scheduled = true);
+            return Command::perform(async {}, move |_| AppMessage::ArriveByOneFloor(lift_idx));
+        }
+        Command::none()
     }
-
 
     const fn calc_rows2(total: i32, per: i32) -> i32 {
         let rows = total / per;
@@ -333,7 +384,7 @@ impl ElevatorApp {
         }
     }
 
-    fn add_to_wait_floor(&mut self, direction: Direction) {
+    fn add_to_wait_floor(&mut self, direction: Direction) -> Command<AppMessage> {
         let fi = WaitFloorTxtState {
             floor: self.floor,
             direction,
@@ -346,6 +397,8 @@ impl ElevatorApp {
         } else {
             println!("电梯繁忙，请稍后再试,{}", self.floor);
         }
+        self.set_random_floor();
+        self.schedule2(fi.floor, direction)
     }
 }
 
@@ -394,26 +447,27 @@ impl Application for ElevatorApp {
                 self.tmp_floor = self.floor;
             }
             AppMessage::ClickedBtnUp => {
-                self.add_to_wait_floor(Direction::Up);
-                self.set_random_floor();
+                return self.add_to_wait_floor(Direction::Up);
             }
             AppMessage::ClickedBtnDown => {
-                self.add_to_wait_floor(Direction::Down);
-                self.set_random_floor();
+                return self.add_to_wait_floor(Direction::Down);
             }
             AppMessage::Scheduling => {
-                return self.schedule();
-            }
-            AppMessage::Scheduled => {
-                return Command::batch(
-                    self.lifts
-                        .iter()
-                        .filter(|item| !item.schedule_floors.is_empty() || !item.stop_floors.is_empty())
-                        .map(|lift| {
-                            let no = lift.no;
-                            Command::perform(async move {}, move |_| AppMessage::ArriveByOneFloor(no))
+                return Command::batch(self
+                    .wait_floors
+                    .iter()
+                    .filter(|wf| !wf.is_scheduled)
+                    .map(|wf| {
+                        let floor = wf.floor;
+                        let direction = wf.direction;
+                        Command::perform(async {}, move |_| {
+                            AppMessage::Scheduling2(floor, direction)
                         })
+                    })
                 );
+            }
+            AppMessage::Scheduling2(floor, direction) => {
+                return self.schedule2(floor, direction);
             }
 
             AppMessage::ArriveByOneFloor(no) => {
@@ -528,10 +582,8 @@ impl Application for ElevatorApp {
     fn subscription(&self) -> Subscription<Self::Message> {
         // 每隔3秒检查一次是否有用户要乘电梯，有的话，就要去调度
         Subscription::batch(vec![
-            time::every(Duration::from_secs(2))
+            time::every(Duration::from_secs(5))
                 .map(|_| AppMessage::Scheduling),
-            // time::every(Duration::from_secs(3))
-            //     .map(|_| AppMessage::LiftRunning),
         ])
     }
 
