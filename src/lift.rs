@@ -21,7 +21,6 @@ pub struct Lift {
     pub persons: i32,
     // 电梯当前停靠楼层
     pub cur_floor: TFloor,
-    pub dest_floor: Option<TFloor>,
     // 用户输入的停靠楼层
     pub can_click_btn: bool,
     pub stop_floors: BTreeMap<TFloor, Option<Direction>>,

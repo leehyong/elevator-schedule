@@ -355,25 +355,8 @@ impl Application for ElevatorApp {
                             lift.cur_floor -= 1;
                         }
                     }
-                    if let Some(df) = lift.dest_floor {
-                        match lift.state {
-                            State::GoingUp | State::GoingUpSuspend => {
-                                if df > dest_floor { return Command::none(); }
-                            }
-                            State::GoingDown | State::GoingDownSuspend => {
-                                if df < dest_floor { return Command::none(); }
-                            }
-                            State::Maintaining => {
-                                unreachable!()
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    lift.dest_floor = Some(dest_floor);
                     let is_arrive = lift.cur_floor == dest_floor;
                     if is_arrive {
-                        lift.dest_floor = None;
                         lift.state = match lift.state {
                             State::GoingUp => State::GoingUpSuspend,
                             State::GoingUpSuspend => State::GoingUp,
@@ -395,7 +378,6 @@ impl Application for ElevatorApp {
                     }, |msg| msg)
                 } else {
                     lift.state = State::Stop;
-                    lift.dest_floor = None;
                     Command::none()
                 };
             }
