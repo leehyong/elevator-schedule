@@ -89,7 +89,7 @@ impl ElevatorApp {
                         State::Maintaining => false,
                     }
                 }) {
-                println!("{}, idx:{}", lift.to_string(), idx);
+                println!("remove_wait_floor {}, idx:{}", lift.to_string(), idx);
                 let mut after = wait_floors.split_off(idx);
                 after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
                 wait_floors.append(&mut after);
@@ -315,10 +315,8 @@ impl ElevatorApp {
                 Some(top) => {
                     match down_lift {
                         Some(down) => {
-                            let top_diff = floor - self.lifts[top].cur_floor;
-                            let down_diff = self.lifts[down].cur_floor - floor;
-                            assert!(top_diff > 0);
-                            assert!(down_diff > 0);
+                            let top_diff = (floor - self.lifts[top].cur_floor).abs();
+                            let down_diff = (self.lifts[down].cur_floor - floor).abs();
                             if top_diff >= down_diff {
                                 lift_idx = down
                             } else {
@@ -339,7 +337,9 @@ impl ElevatorApp {
             }
             let lift = &mut self.lifts[lift_idx];
             lift.schedule_floors.insert(floor);
+            let mut is_wait = false;
             if lift.state == State::Stop {
+                is_wait = true;
                 if lift.cur_floor > floor {
                     lift.state = State::GoingDown;
                 } else if lift.cur_floor < floor {
@@ -357,7 +357,9 @@ impl ElevatorApp {
                 .iter_mut()
                 .filter(|wf| wf.floor == floor && wf.direction == direction)
                 .for_each(|wf| wf.is_scheduled = true);
-            return Command::perform(async {}, move |_| AppMessage::ArriveByOneFloor(lift_idx));
+            return Command::perform(async move {
+                Lift::suspend_one_by_one_floor(lift_idx, is_wait).await
+            }, |msg| msg);
         }
         Command::none()
     }
@@ -473,6 +475,12 @@ impl Application for ElevatorApp {
             AppMessage::ArriveByOneFloor(no) => {
                 let lift = &mut self.lifts[no];
                 let no = lift.no;
+                if lift.state == State::GoingUp {
+                    lift.cur_floor += 1
+                } else if lift.state == State::GoingDown {
+                    lift.cur_floor -= 1;
+                }
+
                 return if let Some(dest_floor) = lift.dest_floor() {
                     if let Some(df) = lift.dest_floor {
                         match lift.state {
@@ -488,20 +496,16 @@ impl Application for ElevatorApp {
                             _ => {}
                         }
                     }
-                    if lift.state == State::GoingUp {
-                        lift.cur_floor += 1
-                    } else if lift.state == State::GoingDown {
-                        lift.cur_floor -= 1;
-                    }
+
                     lift.dest_floor = Some(dest_floor);
                     let is_arrive = lift.cur_floor == dest_floor;
                     if is_arrive {
                         lift.dest_floor = None;
                         lift.state = match lift.state {
                             State::GoingUp => State::GoingUpSuspend,
-                            // State::GoingUpSuspend => State::GoingUp,
+                            State::GoingUpSuspend => State::GoingUp,
                             State::GoingDown => State::GoingDownSuspend,
-                            // State::GoingDownSuspend => State::GoingDown,
+                            State::GoingDownSuspend => State::GoingDown,
                             State::Stop => State::Stop,
                             _ => {
                                 println!("ArriveByOneFloor {:?}", lift.state);
@@ -519,6 +523,8 @@ impl Application for ElevatorApp {
                     }, |msg| msg)
                 } else {
                     lift.state = State::Stop;
+                    lift.dest_floor = None;
+                    lift.can_click_btn = false;
                     lift.persons = 0;
                     Command::none()
                 };
@@ -526,19 +532,19 @@ impl Application for ElevatorApp {
 
             AppMessage::WaitUserInputFloor(no) => {
                 let lift = &mut self.lifts[no];
-                lift.state = match lift.state {
-                    State::GoingUpSuspend => State::GoingUp,
-                    State::GoingDownSuspend => State::GoingDown,
-                    State::Stop => State::Stop,
-                    _ => unreachable!()
+                match lift.state {
+                    State::GoingUpSuspend => lift.state = State::GoingUp,
+                    State::GoingDownSuspend => lift.state = State::GoingDown,
+                    _ => {}
                 };
                 lift.set_persons();
                 if lift.persons != 0 {
                     lift.can_click_btn = true;
                 } else {
                     lift.persons = 0;
+                    lift.can_click_btn = false;
                 }
-                println!("电梯#{}-{}层,{}", no, lift.cur_floor, lift.state.to_string());
+                println!("_WaitUserInputFloor 电梯#{}-{}层,{}", no, lift.cur_floor, lift.state.to_string());
                 return Command::perform(async move {
                     Lift::suspend_one_by_one_floor(no, false).await
                 }, |msg| msg);
