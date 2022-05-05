@@ -9,19 +9,20 @@ pub enum EState {
     Noop,
 }
 
-#[derive(Copy, Clone,Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum FloorType {
-    Person,
+    PersonUp,
+    PersonDown,
     Elevator(usize),
 }
 
 impl Default for FloorType {
     fn default() -> Self {
-        Self::Person
+        Self::PersonUp
     }
 }
 
-#[derive(Debug,)]
+#[derive(Debug, )]
 pub struct UpDownElevatorFloor {
     pub floor: TFloor,
     pub typ: FloorType,
@@ -39,15 +40,15 @@ impl UpDownElevatorFloor {
             // 从而保证在一组数据在升序时， Person 类型的对象 比 Elevator类型的对象 靠前
             use FloorType::*;
             match self.typ {
-                Person => {
+                PersonUp | PersonDown => {
                     match other.typ {
-                        Person => Ordering::Equal,
+                        PersonUp | PersonDown => Ordering::Equal,
                         Elevator(_) => Ordering::Less
                     }
                 }
                 Elevator(v1) => {
                     match other.typ {
-                        Person => Ordering::Greater,
+                        PersonUp | PersonDown => Ordering::Greater,
                         Elevator(v2) => {
                             match self.state {
                                 EState::Running => {
@@ -93,7 +94,8 @@ impl Display for FloorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
             FloorType::Elevator(v) => format!("Elevator({})", v),
-            FloorType::Person => "Person".to_string()
+            FloorType::PersonUp => "PersonUp".to_string(),
+            FloorType::PersonDown => "PersonDown".to_string(),
         })
     }
 }

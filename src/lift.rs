@@ -1,5 +1,5 @@
 use std::cmp::{max, min, Ordering};
-use std::collections::{BTreeSet, HashMap, LinkedList};
+use std::collections::{BTreeMap, BTreeSet, HashMap, LinkedList};
 use std::fmt::{Display, Formatter};
 use crate::conf::{EVERY_FLOOR_RUN_TIME_IN_MILLISECONDS, MAX_ELEVATOR_NUM, MAX_FLOOR, MAX_PERSON_CAPACITY, MIN_FLOOR, TFloor};
 use crate::floor_btn::{Direction, FloorBtnState};
@@ -23,12 +23,12 @@ pub struct Lift {
     pub cur_floor: TFloor,
     pub dest_floor: Option<TFloor>,
     // 用户输入的停靠楼层
-    pub stop_floors: BTreeSet<TFloor>,
     pub can_click_btn: bool,
+    pub stop_floors: BTreeMap<TFloor, Option<Direction>>,
     // 调度器调度的停靠楼层
     // 上行时，schedule_floors 的元素值 > cur_floor
     // 下行时，schedule_floors 的元素值 < cur_floor
-    pub schedule_floors: BTreeSet<TFloor>,
+    pub schedule_floors: BTreeMap<TFloor, Option<Direction>>,
     // 电梯里的按钮
     pub elevator_btns: Vec<FloorBtnState>,
 }
@@ -62,21 +62,27 @@ impl Lift {
 
     pub fn dest_floor(&self) -> Option<TFloor> {
         self.schedule_floors
-            .union(&self.stop_floors)
+            .keys()
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+            .union(&self.stop_floors
+                .keys()
+                .into_iter()
+                .collect::<BTreeSet<_>>())
             .into_iter()
             .filter(|o| match self.state {
-                State::GoingUp | State::GoingUpSuspend => *o >= &self.cur_floor,
-                State::GoingDown | State::GoingDownSuspend => *o <= &self.cur_floor,
+                State::GoingUp | State::GoingUpSuspend => **o >= &self.cur_floor,
+                State::GoingDown | State::GoingDownSuspend => **o <= &self.cur_floor,
                 State::Stop => true,
                 State::Maintaining => false,
             })
             .next()
-            .map(|o| *o)
+            .map(|o| **o)
     }
 
-    pub fn remove_floor(&mut self, floor: TFloor) {
-        self.schedule_floors.remove(&floor);
+    pub fn remove_floor(&mut self, floor: TFloor) -> Option<Direction>{
         self.stop_floors.remove(&floor);
+        self.schedule_floors.remove(&floor).unwrap_or(None)
     }
     pub fn is_overload(&self) ->bool{
         self.persons > MAX_PERSON_CAPACITY as i32

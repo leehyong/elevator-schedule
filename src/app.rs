@@ -74,187 +74,31 @@ impl ElevatorApp {
         Self::calc_rows2(MAX_FLOOR - MIN_FLOOR, BTN_PER_ROW)
     }
 
-    fn remove_wait_floor(wait_floors: &mut LinkedList<WaitFloorTxtState>, floor: TFloor, lift: &Lift)
+    fn remove_wait_floor(wait_floors: &mut LinkedList<WaitFloorTxtState>, floor: TFloor, lift: &mut Lift)
     {
-        // 删除正在等待的楼层
-        loop {
-            if let Some((idx, _)) = wait_floors
-                .iter()
-                .enumerate()
-                .find(|(_, wf)| wf.floor == floor && {
-                    match lift.state {
-                        State::GoingUp | State::GoingUpSuspend => wf.direction == Direction::Up,
-                        State::GoingDown | State::GoingDownSuspend => wf.direction == Direction::Down,
-                        State::Stop => true,
-                        State::Maintaining => false,
-                    }
-                }) {
-                println!("remove_wait_floor {}, idx:{}", lift.to_string(), idx);
-                let mut after = wait_floors.split_off(idx);
-                after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
-                wait_floors.append(&mut after);
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn handle_up_floors(&self, floors: &[TFloor]) -> Vec<LiftUpDownCost> {
-        let mut ret = vec![];
-        for lift in &self.lifts
-        {
-            // 每个静止的电梯都要考虑， 上下两个方向的成本
-            if lift.state != State::Stop {
-                continue;
-            }
-            let mut cnt = 0;
-            let cost = floors.iter()
-                .filter(|floor| **floor >= lift.cur_floor)
-                .map(|floor| {
-                    cnt += 1;
-                    (floor - lift.cur_floor)
-                }).sum();
-            ret.push(LiftUpDownCost {
-                no: lift.no,
-                cost,
-                cnt,
-            });
-        }
-        ret.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        ret
-    }
-    fn handle_down_floors(&self, floors: &[TFloor]) -> Vec<LiftUpDownCost> {
-        let mut ret = vec![];
-        for lift in self.lifts.iter()
-
-        {
-            // 每个静止的电梯都要考虑， 上下两个方向的成本
-            if lift.state != State::Stop {
-                continue;
-            }
-            let mut cnt = 0;
-            let cost = floors.iter()
-                .filter(|floor| **floor <= lift.cur_floor)
-                .map(|floor| {
-                    cnt += 1;
-                    lift.cur_floor - floor
-                }).sum();
-            ret.push(LiftUpDownCost {
-                no: lift.no,
-                cost,
-                cnt,
-            });
-        }
-        ret.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        ret
-    }
-
-    fn set_stopped_lift(&mut self, no: usize, direction: Direction) {
-        let lift = &mut self.lifts[no];
-        let mut num = 0;
-        for wf in
-        self.wait_floors
-            .iter()
-            .filter(|wf| {
-                match direction {
-                    Direction::Up => wf.floor >= lift.cur_floor,
-
-                    Direction::Down => wf.floor <= lift.cur_floor
-                }
-            }) {
-            num += 1;
-            lift.schedule_floors.insert(wf.floor);
-        }
-        if num > 0 {
-            lift.state = match direction {
-                Direction::Up => State::GoingUp,
-                Direction::Down => State::GoingDown,
-            };
-        }
-    }
-
-    fn schedule_stopped_lift(&mut self, up_floors: &[TFloor], down_floors: &[TFloor]) {
-        // 上行代价和下行代价相同时，尽量去接 楼层数更多的
-        // 最小的上下行代价
-        let mut ups = self.handle_up_floors(up_floors);
-        let mut downs = self.handle_down_floors(down_floors);
-        assert_eq!(ups.len(), downs.len());
-        // ups 和 downs 数量肯定相同
-        if ups.is_empty() {
-            return;
-        }
-        let mut up = &ups[0];
-        let mut down = &downs[0];
-        if ups.len() == 1 {
-            if up <= down {
-                self.set_stopped_lift(up.no, Direction::Up);
-            } else {
-                self.set_stopped_lift(up.no, Direction::Up);
-            }
-        } else {
-            // 超过1部电梯是静止
-            // 上下，都是同一部电梯时，就使用对应的第二部电梯来做判断了
-            if up.no == down.no {
-                if up <= down {
-                    down = &downs[1];
-                } else {
-                    up = &ups[1];
-                }
-            }
-            self.set_stopped_lift(up.no, Direction::Up);
-            self.set_stopped_lift(down.no, Direction::Down);
-        }
-    }
-    /*
-        fn schedule_running_lift(&mut self) {
-            for direction in [Direction::Up, Direction::Down] {
-                let mut one_direction_floors = self.wait_floors
+        let direction = lift.remove_floor(floor);
+        if let Some(direct) = direction {
+            // 删除正在等待的楼层
+            loop {
+                if let Some((idx, _)) = wait_floors
                     .iter()
-                    .filter(|o| o.direction == direction && !o.is_scheduled)
-                    .map(|o| {
-                        UpDownElevatorFloor { floor: o.floor, typ: FloorType::Person }
-                    })
-                    .collect::<Vec<_>>();
-                for lift in self.lifts.iter() {
-                    match direction {
-                        Direction::Up => {
-                            if lift.state == State::GoingUp || lift.state == State::GoingUpSuspend {
-                                one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
-                            }
-                        }
-                        Direction::Down => {
-                            if lift.state == State::GoingDown || lift.state == State::GoingDownSuspend {
-                                one_direction_floors.push(UpDownElevatorFloor { floor: lift.cur_floor, typ: FloorType::Elevator(lift.no) })
-                            }
-                        }
-                    }
-                }
-                // 通过排序， 确定每个电梯应该响应哪些楼层
-                match direction {
-                    // 上升， 升序
-                    Direction::Up => one_direction_floors.sort(),
-                    // 下降， 降序
-                    Direction::Down => one_direction_floors.sort_by(|a, b| b.cmp(a))
-                }
-                let mut elevator = None;
-                for item in one_direction_floors {
-                    match item.typ {
-                        FloorType::Elevator(idx) => {
-                            elevator = Some(&mut self.lifts[idx])
-                        }
-                        FloorType::Person => {
-                            if let Some(ref mut ele) = elevator {
-                                ele.schedule_floors.insert(item.floor);
-                            }
-                        }
-                    }
+                    .enumerate()
+                    .find(|(_, wf)| wf.floor == floor && wf.direction == direct
+                    ) {
+                    println!("remove_wait_floor {}, 索引:{}", lift.to_string(), idx);
+                    let mut after = wait_floors.split_off(idx);
+                    after.pop_front(); // 删除首部元素， 再跟原来的 list 拼接起来
+                    wait_floors.append(&mut after);
+                } else {
+                    break;
                 }
             }
         }
-    */
+    }
+
     fn new_up_down_elevator(&self, floor: TFloor, typ: FloorType) -> UpDownElevatorFloor {
         match typ {
-            FloorType::Person => UpDownElevatorFloor {
+            FloorType::PersonUp | FloorType::PersonDown => UpDownElevatorFloor {
                 floor,
                 typ,
                 state: EState::Noop,
@@ -274,7 +118,11 @@ impl ElevatorApp {
     }
 
     fn schedule2(&mut self, floor: TFloor, direction: Direction) -> Command<AppMessage> {
-        let mut a = vec![self.new_up_down_elevator(floor, FloorType::Person)];
+        let mut a = vec![
+            self.new_up_down_elevator(floor, match direction {
+                Direction::Up => FloorType::PersonUp,
+                Direction::Down => FloorType::PersonDown,
+            })];
         a.extend(self.lifts
             .iter()
             .filter(|lift| lift.state == State::Stop ||
@@ -298,7 +146,7 @@ impl ElevatorApp {
         let mut find = false;
         for item in a {
             match item.typ {
-                FloorType::Person => find = true,
+                FloorType::PersonUp | FloorType::PersonDown => find = true,
                 FloorType::Elevator(no) => {
                     if !find {
                         top_lift = Some(no);
@@ -336,7 +184,7 @@ impl ElevatorApp {
                 }
             }
             let lift = &mut self.lifts[lift_idx];
-            lift.schedule_floors.insert(floor);
+            lift.schedule_floors.insert(floor, Some(direction));
             let mut is_wait = false;
             if lift.state == State::Stop {
                 is_wait = true;
@@ -475,13 +323,21 @@ impl Application for ElevatorApp {
             AppMessage::ArriveByOneFloor(no) => {
                 let lift = &mut self.lifts[no];
                 let no = lift.no;
-                if lift.state == State::GoingUp {
-                    lift.cur_floor += 1
-                } else if lift.state == State::GoingDown {
-                    lift.cur_floor -= 1;
-                }
-
                 return if let Some(dest_floor) = lift.dest_floor() {
+                    if lift.state == State::GoingUp {
+                        // 避免出现楼层为 0 的情况
+                        if lift.cur_floor == -1 {
+                            lift.cur_floor = 1;
+                        } else {
+                            lift.cur_floor += 1;
+                        }
+                    } else if lift.state == State::GoingDown {
+                        if lift.cur_floor == 1 {
+                            lift.cur_floor = -1;
+                        } else {
+                            lift.cur_floor -= 1;
+                        }
+                    }
                     if let Some(df) = lift.dest_floor {
                         match lift.state {
                             State::GoingUp | State::GoingUpSuspend => {
@@ -491,7 +347,7 @@ impl Application for ElevatorApp {
                                 if df < dest_floor { return Command::none(); }
                             }
                             State::Maintaining => {
-                                return Command::none();
+                                unreachable!()
                             }
                             _ => {}
                         }
@@ -512,8 +368,7 @@ impl Application for ElevatorApp {
                                 unreachable!()
                             }
                         };
-                        lift.remove_floor(dest_floor);
-                        Self::remove_wait_floor(&mut self.wait_floors, dest_floor, &lift);
+                        Self::remove_wait_floor(&mut self.wait_floors, dest_floor, lift);
                         println!("ArriveByOneFloor 电梯#{},已达到楼层{},正在等人进出。", no, dest_floor);
                         return Command::perform(async move {}, move |_| AppMessage::WaitUserInputFloor(no));
                     }
@@ -524,8 +379,6 @@ impl Application for ElevatorApp {
                 } else {
                     lift.state = State::Stop;
                     lift.dest_floor = None;
-                    lift.can_click_btn = false;
-                    lift.persons = 0;
                     Command::none()
                 };
             }
@@ -559,26 +412,19 @@ impl Application for ElevatorApp {
                         .unwrap();
                     btn.is_active = !btn.is_active;
                     btn.last_pressed = Some(Instant::now());
+
                     if btn.is_active {
-                        lift.stop_floors.insert(floor);
+                        lift.stop_floors.insert(floor, None);
                     } else {
                         lift.stop_floors.remove(&floor);
                     }
                 }
-                // fixme:  由于iced 的Button没有双击事件，此处无法正确模拟双击， 留待以后再解决 双击取消某楼层
-                // if let Some(inst) = btn.last_pressed {
-                //     // 在一定毫秒内毫秒内连续点击了多次，就认为是双击了
-                //     println!("inst.elapsed().as_millis() < 1000_000 : {}, {}", inst.elapsed().as_millis() < 1000_000, inst.elapsed().as_micros());
-                //     if inst.elapsed().as_millis() < 1000 {
-                //         btn.is_active = false;
-                //     }
-                //     btn.last_pressed = None
-                // } else {
-                //     btn.is_active = true;
-                //     btn.last_pressed = Some(Instant::now());
-                // }
-                // println!("电梯#{},按了{}层, {}, {:?}", no, floor, btn.is_active, btn.last_pressed);
-                println!("电梯#{},按了{}层,", no + 1, floor);
+                println!("电梯#{},按了{}层, {}", no + 1, floor, lift.stop_floors
+                    .keys()
+                    .into_iter()
+                    .map(|o| o.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","));
             }
             _ => {}
         }
@@ -741,7 +587,7 @@ impl Application for ElevatorApp {
                             Text::new(lift
                                 .schedule_floors
                                 .iter()
-                                .map(|o| o.to_string())
+                                .map(|o| o.0.to_string())
                                 .collect::<Vec<_>>().join(","))
                                 .width(Length::Fill)
                                 .color(Color::from_rgb8(51, 161, 255))
@@ -760,7 +606,7 @@ impl Application for ElevatorApp {
                     .fold(vec![],
                           |mut row, (ix, floor)| {
                               floor.can_click = lift.can_click_btn;
-                              floor.is_active = lift.stop_floors.contains(&floor.floor);
+                              floor.is_active = lift.stop_floors.contains_key(&floor.floor);
                               row.push(floor.floor_view());
                               row
                           }) {
