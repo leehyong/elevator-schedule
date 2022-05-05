@@ -60,7 +60,9 @@ impl Lift {
     }
 
     pub fn dest_floor(&self) -> Option<TFloor> {
-        self.schedule_floors
+        // 电梯上行时，拿值最小的一个
+        // 电梯下行时，拿值最大的一个
+        let mut floors = self.schedule_floors
             .keys()
             .into_iter()
             .collect::<BTreeSet<_>>()
@@ -74,9 +76,20 @@ impl Lift {
                 State::GoingDown | State::GoingDownSuspend => **o <= &self.cur_floor,
                 State::Stop => true,
                 State::Maintaining => false,
-            })
-            .next()
-            .map(|o| **o)
+            }).map(|o|**o)
+            .collect::<Vec<_>>();
+        floors.sort();
+        if !floors.is_empty(){
+            return match self.state {
+                State::GoingDown | State::GoingDownSuspend => {
+                    Some(floors[floors.len() - 1])
+                }
+                _ => {
+                    Some(floors[0])
+                }
+            }
+        }
+        None
     }
 
     pub fn remove_floor(&mut self, floor: TFloor) -> Option<Direction> {
