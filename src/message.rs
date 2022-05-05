@@ -34,8 +34,7 @@ pub enum AppMessage {
     ArriveByOneFloor(usize),
     // 到达某楼层之后等待用户的输入
     WaitUserInputFloor(usize),
-    // LiftRunning,
-    // LiftRunningByOne(usize),
+    LiftRunning,
     ClickedBtnPlus,
     ClickedBtnSubtract,
     ClickedBtnUp,

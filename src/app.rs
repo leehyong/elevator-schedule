@@ -316,6 +316,23 @@ impl Application for ElevatorApp {
                     })
                 );
             }
+            AppMessage::LiftRunning => {
+                return Command::batch(self
+                    .lifts
+                    .iter()
+                    .filter(|lift| !lift.stop_floors.is_empty())
+                    .map(|lift| {
+                        let no = lift.no;
+                        println!("LiftRunning {},{}", lift.to_string(),
+                                 lift.stop_floors.keys().map(|k| k.to_string())
+                                     .collect::<Vec<_>>().join(","));
+                        Command::perform(async move {
+                            Lift::suspend_one_by_one_floor(no, false).await
+                        }, move |msg| msg,
+                        )
+                    })
+                );
+            }
             AppMessage::Scheduling2(floor, direction) => {
                 return self.schedule2(floor, direction);
             }
@@ -393,9 +410,6 @@ impl Application for ElevatorApp {
                 lift.set_persons();
                 if lift.persons != 0 {
                     lift.can_click_btn = true;
-                } else {
-                    lift.persons = 0;
-                    lift.can_click_btn = false;
                 }
                 println!("_WaitUserInputFloor 电梯#{}-{}层,{}", no, lift.cur_floor, lift.state.to_string());
                 return Command::perform(async move {
@@ -412,13 +426,57 @@ impl Application for ElevatorApp {
                         .unwrap();
                     btn.is_active = !btn.is_active;
                     btn.last_pressed = Some(Instant::now());
-
+                    let first_floor =  lift.stop_floors.iter().next().map(|o| *o.0);
                     if btn.is_active {
-                        lift.stop_floors.insert(floor, None);
+                        let mut can_insert = match first_floor {
+                            None => true,
+                            Some(_) => {
+                                match lift.state {
+                                    State::GoingUp |State::GoingUpSuspend => floor > lift.cur_floor,
+                                    State::GoingDown |State::GoingDownSuspend => floor < lift.cur_floor,
+                                    State::Stop => true,
+                                    _ => false,
+                                }
+                            }
+                        };
+                        if can_insert {
+                            lift.stop_floors.insert(floor, None);
+                        }
                     } else {
-                        lift.stop_floors.remove(&floor);
+                        if lift.stop_floors.len() > 1 {
+                            // 超过一个输入时， 才允许删除
+                            lift.stop_floors.remove(&floor);
+                        } else {
+                            btn.is_active = true;
+                        }
+                    }
+
+                    if lift.state == State::Stop {
+                        // 有且只有一个输入时， 第一个楼层决定电梯的运行方向
+                        if lift.stop_floors.len() == 1 {
+                            if let Some(floor) =  lift.stop_floors.iter().next().map(|o| *o.0){
+                                if lift.cur_floor < floor {
+                                    lift.state = State::GoingUp
+                                } else {
+                                    lift.state = State::GoingDown
+                                }
+                                println!("elevator_btns,{}", lift.to_string());
+                                lift.elevator_btns
+                                    .iter_mut()
+                                    .filter(|btn| match lift.state {
+                                        State::GoingUp => btn.floor <= lift.cur_floor,
+                                        State::GoingDown => btn.floor >= lift.cur_floor,
+                                        _ => unreachable!()
+                                    })
+                                    .for_each(|btn| {
+                                        btn.can_click = false
+                                    })
+                            }
+                        }
                     }
                 }
+
+
                 println!("电梯#{},按了{}层, {}", no + 1, floor, lift.stop_floors
                     .keys()
                     .into_iter()
@@ -436,6 +494,8 @@ impl Application for ElevatorApp {
         Subscription::batch(vec![
             time::every(Duration::from_secs(5))
                 .map(|_| AppMessage::Scheduling),
+            time::every(Duration::from_secs(5))
+                .map(|_| AppMessage::LiftRunning),
         ])
     }
 

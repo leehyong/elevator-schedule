@@ -24,6 +24,8 @@ impl FloorBtnState {
             .horizontal_alignment(HorizontalAlignment::Center);
         if self.can_click {
             txt = txt.color(Color::from_rgb8(255, 63, 51 ));
+        }else {
+            txt = txt.color(iced::Color::BLACK);
         }
         let mut btn = Button::new(
             &mut self.state,

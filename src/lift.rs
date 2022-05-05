@@ -80,11 +80,11 @@ impl Lift {
             .map(|o| **o)
     }
 
-    pub fn remove_floor(&mut self, floor: TFloor) -> Option<Direction>{
+    pub fn remove_floor(&mut self, floor: TFloor) -> Option<Direction> {
         self.stop_floors.remove(&floor);
         self.schedule_floors.remove(&floor).unwrap_or(None)
     }
-    pub fn is_overload(&self) ->bool{
+    pub fn is_overload(&self) -> bool {
         self.persons > MAX_PERSON_CAPACITY as i32
     }
 
