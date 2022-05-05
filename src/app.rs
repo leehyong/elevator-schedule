@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap, LinkedList};
+use std::collections::{BTreeMap, BTreeSet, HashMap, LinkedList};
 use std::option::Option::Some;
 use std::time::{Duration, Instant};
 use crate::message::*;
@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::lift::{Lift, LiftUpDownCost};
 use crate::up_down_elevator_floor::*;
 use crate::state::State;
-use crate::state::State::{GoingDown, GoingUp};
+use crate::state::State::{GoingDown, GoingUp, GoingUpSuspend};
 
 
 struct ElevatorApp {
@@ -319,10 +319,23 @@ impl Application for ElevatorApp {
             AppMessage::LiftRunning => {
                 return Command::batch(self
                     .lifts
-                    .iter()
-                    .filter(|lift| !lift.stop_floors.is_empty())
+                    .iter_mut()
+                    .filter(|lift| lift.state != State::Maintaining &&
+                        (!lift.stop_floors.is_empty() || !lift.schedule_floors.is_empty()))
                     .map(|lift| {
                         let no = lift.no;
+                        if lift.state == State::Stop {
+                            if let Some(first) = lift.stop_floors.keys().into_iter().collect::<BTreeSet<_>>()
+                                .union(&lift.schedule_floors.keys().into_iter().collect::<BTreeSet<_>>()).next() {
+                                if **first > lift.cur_floor {
+                                    lift.state = State::GoingUp
+                                } else if **first < lift.cur_floor {
+                                    lift.state = State::GoingDown
+                                } else {
+                                    lift.state = State::GoingUpSuspend
+                                }
+                            }
+                        }
                         println!("LiftRunning {},{}", lift.to_string(),
                                  lift.stop_floors.keys().map(|k| k.to_string())
                                      .collect::<Vec<_>>().join(","));
@@ -408,14 +421,14 @@ impl Application for ElevatorApp {
                         .unwrap();
                     btn.is_active = !btn.is_active;
                     btn.last_pressed = Some(Instant::now());
-                    let first_floor =  lift.stop_floors.iter().next().map(|o| *o.0);
+                    let first_floor = lift.stop_floors.iter().next().map(|o| *o.0);
                     if btn.is_active {
                         let mut can_insert = match first_floor {
                             None => true,
                             Some(_) => {
                                 match lift.state {
-                                    State::GoingUp |State::GoingUpSuspend => floor > lift.cur_floor,
-                                    State::GoingDown |State::GoingDownSuspend => floor < lift.cur_floor,
+                                    State::GoingUp | State::GoingUpSuspend => floor > lift.cur_floor,
+                                    State::GoingDown | State::GoingDownSuspend => floor < lift.cur_floor,
                                     State::Stop => true,
                                     _ => false,
                                 }
@@ -436,7 +449,7 @@ impl Application for ElevatorApp {
                     if lift.state == State::Stop {
                         // 有且只有一个输入时， 第一个楼层决定电梯的运行方向
                         if lift.stop_floors.len() == 1 {
-                            if let Some(floor) =  lift.stop_floors.iter().next().map(|o| *o.0){
+                            if let Some(floor) = lift.stop_floors.iter().next().map(|o| *o.0) {
                                 if lift.cur_floor < floor {
                                     lift.state = State::GoingUp
                                 } else {
