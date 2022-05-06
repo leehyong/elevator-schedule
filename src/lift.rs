@@ -21,8 +21,8 @@ pub struct Lift {
     pub persons: i32,
     // 电梯当前停靠楼层
     pub cur_floor: TFloor,
-    // 用户输入的停靠楼层
     pub can_click_btn: bool,
+    // 用户输入的停靠楼层
     pub stop_floors: BTreeMap<TFloor, Option<Direction>>,
     // 调度器调度的停靠楼层
     // 上行时，schedule_floors 的元素值 > cur_floor
@@ -59,6 +59,19 @@ impl Lift {
         r
     }
 
+    pub fn set_lift_btn_click(&mut self) {
+        self.elevator_btns
+            .iter_mut()
+            .for_each(|btn| {
+                match self.state {
+                    State::GoingUp | State::GoingUpSuspend => btn.can_click = self.can_click_btn && btn.floor > self.cur_floor,
+                    State::GoingDown | State::GoingDownSuspend => btn.can_click = self.can_click_btn && btn.floor < self.cur_floor,
+                    State::Stop => btn.can_click = self.can_click_btn,
+                    State::Maintaining => btn.can_click = false,
+                }
+            })
+    }
+
     pub fn dest_floor(&self) -> Option<TFloor> {
         // 电梯上行时，拿值最小的一个
         // 电梯下行时，拿值最大的一个
@@ -76,10 +89,10 @@ impl Lift {
                 State::GoingDown | State::GoingDownSuspend => **o <= &self.cur_floor,
                 State::Stop => true,
                 State::Maintaining => false,
-            }).map(|o|**o)
+            }).map(|o| **o)
             .collect::<Vec<_>>();
         floors.sort();
-        if !floors.is_empty(){
+        if !floors.is_empty() {
             return match self.state {
                 State::GoingDown | State::GoingDownSuspend => {
                     Some(floors[floors.len() - 1])
@@ -87,7 +100,7 @@ impl Lift {
                 _ => {
                     Some(floors[0])
                 }
-            }
+            };
         }
         None
     }
@@ -147,11 +160,12 @@ impl Lift {
 impl Display for Lift {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f,
-               "电梯#{}[{}层-{}人:{}]",
+               "电梯#{}[{}层-{}人:{},click:{}]",
                self.no + 1,
                self.cur_floor,
                self.persons,
-               self.state.to_string()
+               self.state.to_string(),
+               self.can_click_btn
         )
     }
 }

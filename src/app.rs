@@ -320,8 +320,10 @@ impl Application for ElevatorApp {
                 return Command::batch(self
                     .lifts
                     .iter_mut()
-                    .filter(|lift| lift.state != State::Maintaining &&
-                        (!lift.stop_floors.is_empty() || !lift.schedule_floors.is_empty()))
+                    .filter(
+                        |lift| lift.state != State::Maintaining &&
+                            !lift.stop_floors.is_empty()
+                    )
                     .map(|lift| {
                         let no = lift.no;
                         if lift.state == State::Stop {
@@ -354,6 +356,8 @@ impl Application for ElevatorApp {
                 let lift = &mut self.lifts[no];
                 let no = lift.no;
                 return if let Some(dest_floor) = lift.dest_floor() {
+                    lift.set_lift_btn_click();
+                    println!("ArriveByOneFloor_Some, {}, {}", lift.to_string(), dest_floor);
                     if lift.state == State::GoingUp {
                         // 避免出现楼层为 0 的情况
                         if lift.cur_floor == -1 {
@@ -377,12 +381,12 @@ impl Application for ElevatorApp {
                             State::GoingDownSuspend => State::GoingDown,
                             State::Stop => State::Stop,
                             _ => {
-                                println!("ArriveByOneFloor {:?}", lift.state);
+                                println!("ArriveByOneFloor {}", lift.to_string());
                                 unreachable!()
                             }
                         };
                         Self::remove_wait_floor(&mut self.wait_floors, dest_floor, lift);
-                        println!("ArriveByOneFloor 电梯#{},已达到楼层{},正在等人进出。", no, dest_floor);
+                        println!("ArriveByOneFloor {},已达到楼层{},正在等人进出。", lift.to_string(), dest_floor);
                         return Command::perform(async move {}, move |_| AppMessage::WaitUserInputFloor(no));
                     }
                     let no = lift.no;
@@ -390,7 +394,9 @@ impl Application for ElevatorApp {
                         Lift::suspend_one_by_one_floor(no, is_arrive).await
                     }, |msg| msg)
                 } else {
+                    println!("ArriveByOneFloor_None, {}", lift.to_string());
                     lift.state = State::Stop;
+                    lift.set_lift_btn_click();
                     Command::none()
                 };
             }
@@ -403,10 +409,8 @@ impl Application for ElevatorApp {
                     _ => {}
                 };
                 lift.set_persons();
-                if lift.persons != 0 {
-                    lift.can_click_btn = true;
-                }
-                println!("_WaitUserInputFloor 电梯#{}-{}层,{}", no, lift.cur_floor, lift.state.to_string());
+                lift.can_click_btn = lift.persons > 0;
+                println!("_WaitUserInputFloor {}", lift.to_string());
                 return Command::perform(async move {
                     Lift::suspend_one_by_one_floor(no, false).await
                 }, |msg| msg);
@@ -456,23 +460,14 @@ impl Application for ElevatorApp {
                                     lift.state = State::GoingDown
                                 }
                                 println!("elevator_btns,{}", lift.to_string());
-                                lift.elevator_btns
-                                    .iter_mut()
-                                    .filter(|btn| match lift.state {
-                                        State::GoingUp => btn.floor <= lift.cur_floor,
-                                        State::GoingDown => btn.floor >= lift.cur_floor,
-                                        _ => unreachable!()
-                                    })
-                                    .for_each(|btn| {
-                                        btn.can_click = false
-                                    })
+                                lift.set_lift_btn_click();
                             }
                         }
                     }
                 }
 
 
-                println!("电梯#{},按了{}层, {}", no + 1, floor, lift.stop_floors
+                println!("{}, {}", lift.to_string(), lift.stop_floors
                     .keys()
                     .into_iter()
                     .map(|o| o.to_string())
@@ -660,7 +655,6 @@ impl Application for ElevatorApp {
                     .enumerate()
                     .fold(vec![],
                           |mut row, (ix, floor)| {
-                              floor.can_click = lift.can_click_btn;
                               floor.is_active = lift.stop_floors.contains_key(&floor.floor);
                               row.push(floor.floor_view());
                               row
