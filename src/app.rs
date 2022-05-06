@@ -358,6 +358,13 @@ impl Application for ElevatorApp {
                 return if let Some(dest_floor) = lift.dest_floor() {
                     lift.set_lift_btn_click();
                     println!("ArriveByOneFloor_Some, {}, {}", lift.to_string(), dest_floor);
+                    if lift.state == State::Stop{
+                        if lift.cur_floor < dest_floor{
+                            lift.state = State::GoingUp;
+                        }else if lift.cur_floor > dest_floor{
+                            lift.state = State::GoingDown;
+                        }
+                    }
                     if lift.state == State::GoingUp {
                         // 避免出现楼层为 0 的情况
                         if lift.cur_floor == -1 {
